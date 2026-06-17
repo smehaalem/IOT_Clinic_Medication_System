@@ -6,44 +6,43 @@ import airtable_api
 
 def restock_medication(barcode, medicine_name, active_ingredient, dosage, expiry_date, pills_to_add, batch_number):
     """
-    Handles the logic for inbound medication (Restocking / Adding inventory).
+    Handles inbound medication logic. Always creates a NEW RECORD for different batches/expiry dates.
+    If the barcode already exists, it retrieves existing details from Airtable to ensure data consistency
+    and avoid redundant manual user input.
     """
     print(f"\n[RESTOCK] Processing barcode: {barcode}")
 
+    # Check if this barcode already exists anywhere in the database
     existing_med = airtable_api.find_medication_by_barcode(barcode)
 
     if existing_med:
-        record_id = existing_med['id']
         fields = existing_med.get('fields', {})
-
-        current_pills = int(fields.get("Current Pills Count", 0))
-        initial_pills = int(fields.get("Initial Pills Count", 0))
-
-        updated_current = current_pills + int(pills_to_add)
-        updated_initial = max(initial_pills, updated_current)
-
-        new_quantity_remaining = (updated_current / updated_initial) * 100.0
-
-        print(f"[RESTOCK] Existing medicine found: {fields.get('Medicine Name')}. Adding {pills_to_add} pills.")
-        return airtable_api.update_medication_quantity(record_id, updated_current)
-
+        # Barcode found! Reuse official medication details from the cloud
+        final_name = fields.get('Medicine Name', medicine_name)
+        final_active = fields.get('Active Ingredient', active_ingredient)
+        final_dosage = fields.get('Dosage', dosage)
+        print(f"[RESTOCK] Existing barcode detected. Automatically retrieved details for: '{final_name}'")
     else:
-        print(f"[RESTOCK] New medicine detected. Registering '{medicine_name}' in database.")
-        initial_pills = int(pills_to_add)
-        current_pills = int(pills_to_add)
-        quantity_remaining = 100.0
+        # Brand new barcode - use the manual information provided from the input
+        print(f"[RESTOCK] New barcode detected. Using provided details for: '{medicine_name}'")
+        final_name = medicine_name
+        final_active = active_ingredient
+        final_dosage = dosage
 
-        return airtable_api.add_new_medication(
-            medicine_name=medicine_name,
-            barcode=barcode,
-            active_ingredient=active_ingredient,
-            dosage=dosage,
-            expiry_date=expiry_date,
+    # Strict Requirement: Always create a completely new record for independent batch/expiry tracking
+    initial_pills = int(pills_to_add)
+    current_pills = int(pills_to_add)
 
-            initial_pills=initial_pills,
-            current_pills=current_pills,
-            batch_number=batch_number
-        )
+    return airtable_api.add_new_medication(
+        medicine_name=final_name,
+        barcode=barcode,
+        active_ingredient=final_active,
+        dosage=final_dosage,
+        expiry_date=expiry_date,
+        initial_pills=initial_pills,
+        current_pills=current_pills,
+        batch_number=batch_number
+    )
 
 
 def dispense_medication_to_patient(barcode, patient_id, pills_to_dispense, doctor_name):
