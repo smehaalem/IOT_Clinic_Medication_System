@@ -2,7 +2,6 @@ from pyairtable import Api
 import config
 
 # Initialize connection to the Airtable API cloud
-# Initialize connection to the Airtable API cloud
 try:
     airtable_api = Api(config.AIRTABLE_TOKEN)
 
@@ -14,6 +13,7 @@ try:
     print("🌍 Airtable cloud connection successfully initialized!")
 except Exception as e:
     print(f"❌ Error initializing Airtable connection: {e}")
+
 
 def get_all_medications():
     """
@@ -83,53 +83,122 @@ def update_medication_quantity(record_id, new_pill_count):
         print(f"❌ Error updating medication quantity: {e}")
         return None
 
-def get_all_users():
-        """
-        Fetches all user records from the system users table in Airtable.
-        Returns a list of field dictionaries including their Airtable record ID.
-        """
-        try:
-            records = users_table.all()
-            user_list = []
-            for record in records:
-                fields = record['fields']
-                fields['record_id'] = record['id']  # Save the internal ID if needed
-                user_list.append(fields)
-            return user_list
-        except Exception as e:
-            print(f"❌ Error fetching users: {e}")
-            return []
 
-def add_new_user(username, password, role):
-        """
-        Creates a new user record in the SYSTEM_USERS table.
-        """
-        try:
-            fields_data = {
-                "Username": str(username),
-                "Password": str(password),
-                "Role": str(role)  # e.g., "Clinic administrator", "Inventory Staff", "Doctor"
-            }
-            new_record = users_table.create(fields_data)
-            print(f"✅ Successfully added new user: {username} with role {role}")
-            return new_record
-        except Exception as e:
-            print(f"❌ Error adding new user to cloud: {e}")
-            return None
+def get_all_users():
+    """
+    Fetches all user records from the system users table in Airtable.
+    Returns a list of field dictionaries including their Airtable record ID.
+    """
+    try:
+        records = users_table.all()
+        user_list = []
+        for record in records:
+            fields = record['fields']
+            fields['record_id'] = record['id']  # Save the internal ID if needed
+            user_list.append(fields)
+        return user_list
+    except Exception as e:
+        print(f"❌ Error fetching users: {e}")
+        return []
+
+
+def add_new_user(username, password, role, pin_code, full_name):
+    """
+    Creates a new user record in the SYSTEM_USERS table.
+    Uses typecast=True to force Airtable to accept and parse select values safely.
+    """
+    try:
+        clean_role = str(role).strip()
+
+        fields_data = {
+            "Username": str(username).strip(),
+            "Password": str(password).strip(),
+            "Role": clean_role,  # اسم الدور المختار (مثل: Maneger أو Doctor)
+            "PIN Code": str(pin_code).strip(),
+            "Full Name": str(full_name).strip(),
+            "Last Login": ""
+        }
+
+        print(f"🚀 Sending payload to Airtable: {fields_data}")
+
+        new_record = users_table.create(fields_data, typecast=True)
+
+        print(f"✅ Successfully added new user: {username} with role {clean_role}")
+        return new_record
+    except Exception as e:
+        print(f"❌ Error adding new user to cloud: {e}")
+        return None
+
+
 
 def authenticate_user(username, password):
-        """
-        Verifies credentials against the cloud table.
-        Returns the user's role string if successful, otherwise None.
-        """
-        try:
-            formula = f"{{Username}} = '{username}'"
-            records = users_table.all(formula=formula)
-            if records:
-                user_fields = records[0]['fields']
-                if user_fields.get("Password") == password:
-                    return user_fields.get("Role")
-            return None
-        except Exception as e:
-            print(f"❌ Error during authentication: {e}")
-            return None
+    """
+    Verifies credentials against the cloud table.
+    Returns the user's role string if successful, otherwise None.
+    """
+    try:
+        formula = f"{{Username}} = '{username}'"
+        records = users_table.all(formula=formula)
+        if records:
+            user_fields = records[0]['fields']
+            if user_fields.get("Password") == password:
+                return user_fields.get("Role")
+        return None
+    except Exception as e:
+        print(f"❌ Error during authentication: {e}")
+        return None
+
+
+# ==========================================
+# HISTORY TABLE FUNCTIONS
+# ==========================================
+
+def log_transaction(action_type, barcode, action_by_user, quantity_taken, removal_reason=""):
+    """
+    Logs a new transaction to the Dispensed_History table.
+    Safely handles Multiple Select fields like 'Removal Reason' by only including them if provided.
+    """
+    try:
+        fields_data = {
+            "Action Type": str(action_type),
+            "Barcode": str(barcode),
+            "Action By User": str(action_by_user),  # 🔹 Removed brackets [] here!
+            "Quantity": int(quantity_taken)
+        }
+
+        # Only attach the Reason field if a valid string was provided
+        if removal_reason:
+            fields_data["Removal Reason"] = [str(removal_reason)]
+
+        new_record = history_table.create(fields_data, typecast=True)
+        print(f"✅ Successfully logged transaction: {action_type} for barcode {barcode}")
+        return new_record
+    except Exception as e:
+        print(f"❌ Error logging transaction to cloud: {e}")
+        return None
+
+
+def get_all_history():
+    """
+    Fetches the entire transaction history from the cloud.
+    """
+    try:
+        records = history_table.all()
+        return records
+    except Exception as e:
+        print(f"❌ Error fetching transaction history: {e}")
+        return []
+
+
+def get_all_medications_by_barcode(barcode_value):
+    """
+    Searches for ALL medication records in the cloud based on a unique barcode.
+    Returns a list of records, which can be used to display different batches/expiry dates.
+    """
+    try:
+        formula = f"{{Barcode}} = '{barcode_value}'"
+        records = stock_table.all(formula=formula)
+        return records
+    except Exception as e:
+        print(f"❌ Error searching medications by barcode: {e}")
+        return []
