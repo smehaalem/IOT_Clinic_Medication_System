@@ -202,3 +202,4 @@ def get_all_medications_by_barcode(barcode_value):
     except Exception as e:
         print(f"❌ Error searching medications by barcode: {e}")
         return []
+
