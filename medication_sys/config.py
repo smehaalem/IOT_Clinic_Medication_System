@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 AIRTABLE_TOKEN = os.getenv("AIRTABLE_TOKEN")
-BASE_ID = "apptm9srPy0J7Z5Hc"
+BASE_ID = os.getenv("BASE_ID")
 
 
 TABLE_AVAILABLE_STOCK = "Available Stock"
