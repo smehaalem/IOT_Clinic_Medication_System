@@ -99,11 +99,10 @@ def get_aggregated_stock_for_barcode(barcode):
 def dispense_medication_to_patient(barcode, record_id, pills_to_dispense, doctor_name):
     """
     Handles outbound medication logic (Dispensing pills to a specific patient).
-    Now takes a specific record_id to deduct from the exact batch chosen by the user.
+    Automatically deletes the record if the remaining quantity reaches zero.
     """
     print(f"\n[DISPENSE] Request to dispense {pills_to_dispense} pills from record ID: {record_id}")
 
-    # We need to fetch the specific record to know its current state
     try:
         med_record = airtable_api.stock_table.get(record_id)
     except Exception as e:
@@ -116,16 +115,23 @@ def dispense_medication_to_patient(barcode, record_id, pills_to_dispense, doctor
     initial_pills = int(fields.get("Initial Pills Count", 1))
 
     if current_pills < int(pills_to_dispense):
-        print(
-            f"❌ Dispense Failed: Insufficient stock in this batch. Available: {current_pills}, Requested: {pills_to_dispense}")
-        return {"success": False, "message": f"Insufficient stock in selected batch. Only {current_pills} left."}
+        print(f"❌ Dispense Failed: Insufficient stock. Available: {current_pills}, Requested: {pills_to_dispense}")
+        return {"success": False, "message": f"Insufficient stock. Only {current_pills} left."}
 
     updated_current = current_pills - int(pills_to_dispense)
-    new_quantity_remaining = (updated_current / initial_pills) * 100.0
 
-    airtable_api.update_medication_quantity(record_id, updated_current)
-    print(f"✅ Dispense Successful: {pills_to_dispense} pills of {medicine_name} deducted from batch.")
+    # בדיקה האם המלאי נגמר
+    if updated_current <= 0:
+        print(f"⚠️ Batch depleted for {medicine_name}. Deleting record from Airtable...")
+        airtable_api.stock_table.delete(record_id)
+        new_quantity_remaining = 0.0
+    else:
+        # עדכון כמות אם לא נגמר
+        new_quantity_remaining = (updated_current / initial_pills) * 100.0
+        airtable_api.update_medication_quantity(record_id, updated_current)
+        print(f"✅ Dispense Successful: {pills_to_dispense} pills deducted. Remaining: {updated_current}")
 
+    # תיעוד בהיסטוריה
     airtable_api.log_transaction(
         action_type="Dispense",
         barcode=barcode,
