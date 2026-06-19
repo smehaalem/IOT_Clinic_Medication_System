@@ -87,20 +87,25 @@ def update_medication_quantity(record_id, new_pill_count):
 def get_all_users():
     """
     Fetches all user records from the system users table in Airtable.
-    Returns a list of field dictionaries including their Airtable record ID.
+    Corrected to dynamically handle both object and dict types from pyairtable.
     """
     try:
         records = users_table.all()
         user_list = []
         for record in records:
-            fields = record['fields']
-            fields['record_id'] = record['id']  # Save the internal ID if needed
+            # الفحص الذكي: هل السجل كائن (Object) أم قاموس (Dict)؟
+            if hasattr(record, 'fields'):
+                fields = record.fields.copy()
+                fields['record_id'] = record.id
+            else:
+                fields = record.get('fields', {}).copy()
+                fields['record_id'] = record.get('id')
+
             user_list.append(fields)
         return user_list
     except Exception as e:
-        print(f"❌ Error fetching users: {e}")
+        print(f"❌ Error fetching users from Airtable: {e}")
         return []
-
 
 def add_new_user(username, password, role, pin_code, full_name):
     """
@@ -113,7 +118,7 @@ def add_new_user(username, password, role, pin_code, full_name):
         fields_data = {
             "Username": str(username).strip(),
             "Password": str(password).strip(),
-            "Role": clean_role,  # اسم الدور المختار (مثل: Maneger أو Doctor)
+            "Role": clean_role,
             "PIN Code": str(pin_code).strip(),
             "Full Name": str(full_name).strip(),
             "Last Login": ""
