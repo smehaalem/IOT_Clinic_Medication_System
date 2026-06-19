@@ -134,6 +134,39 @@ def add_new_user(username, password, role, pin_code, full_name):
         print(f"❌ Error adding new user to cloud: {e}")
         return None
 
+def update_user_records(record_id, username, password, role, pin_code, full_name):
+    """
+    Updates an existing user record in the Users table by its Airtable record_id.
+    """
+    try:
+        fields_to_update = {
+            "Username": str(username).strip(),
+            "Password": str(password).strip(),
+            "Role": str(role).strip(),
+            "PIN Code": str(pin_code).strip(),
+            "Full Name": str(full_name).strip()
+        }
+        # تحديث السجل باستخدام المعرف الفريد وبميزة الـ typecast
+        updated_record = users_table.update(record_id, fields_to_update, typecast=True)
+        print(f"✅ Successfully updated user record ID: {record_id}")
+        return updated_record
+    except Exception as e:
+        print(f"❌ Error updating user in cloud: {e}")
+        return None
+
+
+def delete_user_record(record_id):
+    """
+    Deletes a user record from the Users table permanently by its Airtable record_id.
+    """
+    try:
+        users_table.delete(record_id)
+        print(f"🗑️ Successfully deleted user record ID: {record_id}")
+        return True
+    except Exception as e:
+        print(f"❌ Error deleting user from cloud: {e}")
+        return False
+
 
 
 def authenticate_user(username, password):
