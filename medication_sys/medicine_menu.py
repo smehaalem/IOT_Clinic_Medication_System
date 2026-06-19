@@ -13,57 +13,127 @@ import airtable_api
 
 class QuickLoginDialog(QDialog):
     """
-    Unified Pop-up Authentication Dialog.
-    Prompts for Username and PIN Code, and optionally a Password for Managers.
+    Unified Pop-up Authentication Dialog with integrated In-App Virtual Keyboard
+    designed specifically for Raspberry Pi touchscreens.
     """
 
     def __init__(self, parent=None, require_password=False):
         super().__init__(parent)
         self.require_password = require_password
         self.authenticated_user = None
+        self.current_focused_input = None  # لتتبع أي صندوق نصوص نكتب بداخله الآن
         self.init_ui()
 
     def init_ui(self):
         self.setWindowTitle("Security Verification")
-        self.setFixedWidth(340)
+        self.setFixedWidth(500)  # قمنا بتوسيع النافذة قليلاً لتستوعب الكيبورد بشكل مريح
         self.setStyleSheet("background-color: #FFFFFF;")
 
-        layout = QVBoxLayout(self)
-        layout.setSpacing(12)
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(10)
 
         title = QLabel("Security Gate")
         title.setStyleSheet("font-size: 18px; font-weight: bold; color: #2D3748; margin-bottom: 5px;")
         title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
+        main_layout.addWidget(title)
 
+        # ---- قسم حقول الإدخال ----
         # Username Field
-        layout.addWidget(QLabel("Username:"))
+        main_layout.addWidget(QLabel("Username:"))
         self.username_input = QLineEdit()
-        self.username_input.setStyleSheet("padding: 8px; border: 1.5px solid #CBD5E0; border-radius: 6px;")
-        layout.addWidget(self.username_input)
+        self.username_input.setStyleSheet(
+            "padding: 8px; border: 1.5px solid #CBD5E0; border-radius: 6px; font-size: 14px;")
+        self.username_input.focusInEvent = lambda event: self.set_current_focus(self.username_input, event)
+        main_layout.addWidget(self.username_input)
 
         # PIN Code Field
-        layout.addWidget(QLabel("PIN Code:"))
+        main_layout.addWidget(QLabel("PIN Code:"))
         self.pin_input = QLineEdit()
         self.pin_input.setEchoMode(QLineEdit.Password)
-        self.pin_input.setStyleSheet("padding: 8px; border: 1.5px solid #CBD5E0; border-radius: 6px;")
-        layout.addWidget(self.pin_input)
+        self.pin_input.setStyleSheet("padding: 8px; border: 1.5px solid #CBD5E0; border-radius: 6px; font-size: 14px;")
+        self.pin_input.focusInEvent = lambda event: self.set_current_focus(self.pin_input, event)
+        main_layout.addWidget(self.pin_input)
 
         # Conditional Password Field for Manager panel access
         if self.require_password:
-            layout.addWidget(QLabel("Manager Password:"))
+            main_layout.addWidget(QLabel("Manager Password:"))
             self.password_input = QLineEdit()
             self.password_input.setEchoMode(QLineEdit.Password)
-            self.password_input.setStyleSheet("padding: 8px; border: 1.5px solid #CBD5E0; border-radius: 6px;")
-            layout.addWidget(self.password_input)
+            self.password_input.setStyleSheet(
+                "padding: 8px; border: 1.5px solid #CBD5E0; border-radius: 6px; font-size: 14px;")
+            self.password_input.focusInEvent = lambda event: self.set_current_focus(self.password_input, event)
+            main_layout.addWidget(self.password_input)
 
         # Action Verification Button
         verify_btn = QPushButton("Verify Identity")
         verify_btn.setCursor(QCursor(Qt.PointingHandCursor))
         verify_btn.setStyleSheet(
-            "background-color: #6200EA; color: white; padding: 10px; font-weight: bold; border-radius: 6px; margin-top: 5px;")
+            "background-color: #6200EA; color: white; padding: 10px; font-weight: bold; border-radius: 6px; margin-top: 5px; font-size: 14px;")
         verify_btn.clicked.connect(self.handle_verification)
-        layout.addWidget(verify_btn)
+        main_layout.addWidget(verify_btn)
+
+        # ---- بناء الكيبورد الوهمي الداخلي المدمج ----
+        main_layout.addWidget(QLabel("Virtual Keyboard:"))
+        keyboard_widget = QWidget()
+        keyboard_layout = QVBoxLayout(keyboard_widget)
+        keyboard_layout.setContentsMargins(0, 0, 0, 0)
+        keyboard_layout.setSpacing(5)
+
+        # توزيع أسطر الكيبورد (أرقام وحروف صغيرة لتسهيل إدخال الـ admin والـ PIN)
+        rows = [
+            ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+            ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+            ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', '-'],
+            ['z', 'x', 'c', 'v', 'b', 'n', 'm', '🔑 admin', 'Clear', '⌫']
+        ]
+
+        for row in rows:
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(4)
+            for key in row:
+                btn = QPushButton(key)
+                btn.setFocusPolicy(Qt.NoFocus)  # 🔥 السطر السحري: يمنع الزر من سحب التركيز من الـ Input Box
+                btn.setCursor(QCursor(Qt.PointingHandCursor))
+
+                # تصميم أزرار الكيبورد لتبدو مريحة للّمس
+                if key in ['Clear', '⌫', '🔑 admin']:
+                    btn.setStyleSheet(
+                        "background-color: #E2E8F0; color: #2D3748; font-weight: bold; padding: 8px; border-radius: 4px; font-size: 12px;")
+                else:
+                    btn.setStyleSheet(
+                        "background-color: #EDF2F7; color: #2D3748; padding: 8px; border-radius: 4px; font-weight: bold; font-size: 14px;")
+
+                btn.clicked.connect(lambda checked, k=key: self.handle_key_press(k))
+                row_layout.addWidget(btn)
+            keyboard_layout.addLayout(row_layout)
+
+        main_layout.addWidget(keyboard_widget)
+
+        # التركيز الافتراضي البدئي يكون على حقل اسم المستخدم
+        self.current_focused_input = self.username_input
+        self.username_input.setFocus()
+
+    def set_current_focus(self, input_field, event):
+        """ يحفظ الصندوق الحالي الذي يضغط عليه المستخدم ليكتب بداخله ويمرر الحدث الأصلي """
+        self.current_focused_input = input_field
+        # استدعاء السلوك الطبيعي للتركيز الخاص بـ QLineEdit بشكل آمن عبر super
+        super(QLineEdit, input_field).focusInEvent(event)
+
+    def handle_key_press(self, key):
+        """ يعالج الضغط على أزرار الكيبورد المدمج ويدخلها في الصندوق النشط """
+        if not self.current_focused_input:
+            return
+
+        current_text = self.current_focused_input.text()
+
+        if key == '⌫':  # مسح حرف واحد Backspace
+            self.current_focused_input.setText(current_text[:-1])
+        elif key == 'Clear':  # مسح النص كاملاً
+            self.current_focused_input.clear()
+        elif key == '🔑 admin':  # اختصار لكتابة admin بلمسة واحدة
+            self.current_focused_input.setText("admin")
+        else:  # كتابة الحرف أو الرقم المختار
+            self.current_focused_input.setText(current_text + key)
 
     def handle_verification(self):
         username = self.username_input.text().strip()
@@ -78,17 +148,14 @@ class QuickLoginDialog(QDialog):
             user_match = None
 
             for u in all_users:
-                # 1. تنظيف اسم المستخدم ومطابقته بحالة أحرف صغيرة لتجنب الأخطاء
                 db_user = str(u.get("Username", "")).strip()
 
-                # 2. تنظيف الـ PIN Code من أي علامات عشرية (.0) قادمة من السيرفر
                 db_pin_raw = str(u.get("PIN Code", "")).strip()
                 if "." in db_pin_raw:
                     db_pin = db_pin_raw.split(".")[0]
                 else:
                     db_pin = db_pin_raw
 
-                # 3. فحص تطابق اسم المستخدم والـ PIN
                 if db_user == username and db_pin == pin:
                     user_match = u
                     break
@@ -97,7 +164,6 @@ class QuickLoginDialog(QDialog):
                 QMessageBox.critical(self, "Access Denied", "Invalid Username or PIN Code.")
                 return
 
-            # 4. فحص كلمة المرور الإضافية للمدير إذا طلبت البوابة ذلك
             if self.require_password:
                 password = self.password_input.text().strip()
 
@@ -111,12 +177,12 @@ class QuickLoginDialog(QDialog):
                     QMessageBox.critical(self, "Access Denied", "Incorrect Manager Security Password.")
                     return
 
-            # تم التحقق بنجاح!
             self.authenticated_user = user_match
             self.accept()
 
         except Exception as e:
             QMessageBox.critical(self, "Database Error", f"Connection failed: {str(e)}")
+
 
 class UserManagementPage(QWidget):
     """
