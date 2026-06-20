@@ -241,3 +241,23 @@ def get_all_medications_by_barcode(barcode_value):
         print(f"❌ Error searching medications by barcode: {e}")
         return []
 
+def update_medication_full_fields(record_id, medicine_name, barcode, active_ingredient, dosage, expiry_date, pills_count, batch_number):
+    """
+    Updates all fields of an existing medication record in the Available_Stock table.
+    """
+    try:
+        fields_to_update = {
+            "Medicine Name": str(medicine_name),
+            "Barcode": str(barcode),
+            "Active Ingredient": str(active_ingredient),
+            "Dosage": str(dosage),
+            "Expiry Date": str(expiry_date),  # Format: "YYYY-MM-DD"
+            "Current Pills Count": int(pills_count),  # 🔥 تم تصحيح الاسم هنا ليطابق العمود الفعلي في جدولكِ
+            "A Batch": str(batch_number)
+        }
+        updated_record = stock_table.update(record_id, fields_to_update, typecast=True)
+        print(f"✅ Successfully updated medication record ID: {record_id}")
+        return updated_record
+    except Exception as e:
+        print(f"❌ Error updating medication in cloud: {e}")
+        return None
