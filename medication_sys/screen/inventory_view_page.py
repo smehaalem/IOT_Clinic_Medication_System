@@ -1,5 +1,6 @@
 import sys
 import os
+from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -15,7 +16,7 @@ import airtable_api
 class InventoryViewPage(QWidget):
     """
     Modern Inventory Browser with dynamic live filtering and touch keyboard.
-    ⚠️ UPDATED: Keyboard hidden by default, triggers ONLY on manual click/touch.
+    ⚠️ UPDATED: Automatically sorts medication by Expiry Date (Soonest first).
     """
 
     def __init__(self, parent=None, on_back_to_menu=None):
@@ -78,7 +79,6 @@ class InventoryViewPage(QWidget):
         self.search_input.textChanged.connect(self.run_live_filter)
         self.search_input.returnPressed.connect(self.run_live_filter)
 
-        # ربط دالة الفوكس وتثبيت الفلتر لمنع الفتح التلقائي المباغت
         self.search_input.focusInEvent = lambda event: self.handle_input_focus(self.search_input, event)
         self.search_input.installEventFilter(self)
         left_layout.addWidget(self.search_input)
@@ -127,14 +127,13 @@ class InventoryViewPage(QWidget):
 
         main_layout.addWidget(self.kb_card, stretch=4)
 
-        # 🔐 إخفاء الكيبورد افتراضياً وبشكل كامل عند بداية تشغيل الصفحة
         self.kb_card.hide()
 
         self.current_focused_input = self.search_input
         self.search_input.setFocus()
 
     def refresh_inventory_data(self):
-        """ جلب كاش البيانات لايف من السيرفر وعرض كل شيء بشكل أولي للستاف """
+        """ جلب البيانات وترتيبها تلقائياً من التاريخ الأقرب للانتهاء إلى الأبعد """
         self.inventory_list_widget.clear()
         self.all_cached_inventory = []
         try:
@@ -152,8 +151,11 @@ class InventoryViewPage(QWidget):
                         "dosage": fields.get("Dosage", ""),
                         "qty": qty,
                         "batch": fields.get("A Batch", "N/A"),
-                        "expiry": fields.get("Expiry Date", "")
+                        "expiry": fields.get("Expiry Date", "9999-12-31")  # وضع تاريخ افتراضي بعيد في حال خلو الحقل
                     })
+
+            # 🔥 الذكاء المطلوب: ترتيب الداتا لايف بناءً على الـ Expiry Date (الأقرب فالأبعد)
+            self.all_cached_inventory.sort(key=lambda x: x['expiry'])
 
             self.show_items_in_list(self.all_cached_inventory)
         except Exception as e:
@@ -163,7 +165,8 @@ class InventoryViewPage(QWidget):
         self.inventory_list_widget.clear()
         for med in items_list:
             clean_b = med['barcode'][0] if isinstance(med['barcode'], list) else med['barcode']
-            display_text = f"💊 {med['name']} ({med['dosage']}) | Code: {clean_b} | Batch: {med['batch']} | Available: {med['qty']} Pills"
+            # إضافة تاريخ انتهاء الصلاحية بشكل بارز بجانب كل دواء في القائمة
+            display_text = f"📅 [{med['expiry']}] | 💊 {med['name']} ({med['dosage']}) | Code: {clean_b} | Batch: {med['batch']} | Qty: {med['qty']}"
             self.inventory_list_widget.addItem(QListWidgetItem(display_text))
 
     def handle_input_focus(self, input_field, event):
@@ -172,7 +175,6 @@ class InventoryViewPage(QWidget):
         input_field.setFocus(Qt.OtherFocusReason)
 
     def eventFilter(self, obj, event):
-        # تفعيل ظهور الكيبورد فقط في حالة اللمس الفعلي للبوكس لتجنب الفتح التلقائي عند التحميل
         s_input = getattr(self, 'search_input', None)
         if obj == s_input and s_input is not None:
             if event.type() in [QEvent.MouseButtonPress, QEvent.MouseButtonRelease]:

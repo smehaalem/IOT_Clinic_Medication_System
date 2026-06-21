@@ -1,5 +1,13 @@
 import sys
-from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox, QStackedWidget, QApplication, QDialog
+import os
+from datetime import datetime
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QPushButton, QFrame, QMessageBox, QStackedWidget, QDialog, QApplication
+)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QCursor
 
@@ -137,9 +145,12 @@ class MedicineSystemApp(QWidget):
                 self.stack.setCurrentIndex(4)
 
     def open_inventory_browser(self):
-        """ فتح شاشة جرد المخزون وتحديث البيانات لايف تلقائياً """
-        self.inventory_view_page.refresh_inventory_data()
-        self.stack.setCurrentIndex(5)
+        """ 🔥 تم التحديث: طلب تسجيل الدخول أولاً قبل فتح صفحة جرد المخزون """
+        dialog = QuickLoginDialog(self, require_password=False)
+        if dialog.exec_() == QDialog.Accepted:
+            # تحديث وجلب البيانات لايف مصفوفة من الأقرب للانتهاء للأبعد ثم الانتقال
+            self.inventory_view_page.refresh_inventory_data()
+            self.stack.setCurrentIndex(5)
 
     def trigger_manager_portal(self):
         dialog = QuickLoginDialog(self, require_password=True)
