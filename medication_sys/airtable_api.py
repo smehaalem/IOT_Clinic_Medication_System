@@ -15,6 +15,10 @@ except Exception as e:
     print(f"❌ Error initializing Airtable connection: {e}")
 
 
+# =====================================================================
+# 📦 AVAILABLE STOCK TABLE FUNCTIONS
+# =====================================================================
+
 def get_all_medications():
     """
     Fetches the entire list of medications stored in the cloud stock table.
@@ -32,7 +36,6 @@ def find_medication_by_barcode(barcode_value):
     Searches for a specific medication in the cloud based on its unique barcode.
     """
     try:
-        # Fixed field name to match your specific column 'Barcode'
         formula = f"{{Barcode}} = '{barcode_value}'"
         records = stock_table.all(formula=formula)
         if records:
@@ -43,11 +46,63 @@ def find_medication_by_barcode(barcode_value):
         return None
 
 
+def get_all_medications_by_barcode(barcode_value):
+    """
+    Searches for ALL medication records in the cloud based on a unique barcode.
+    Returns a list of raw records.
+    """
+    try:
+        formula = f"{{Barcode}} = '{barcode_value}'"
+        records = stock_table.all(formula=formula)
+        return records
+    except Exception as e:
+        print(f"❌ Error searching medications by barcode: {e}")
+        return []
+
+
+def find_all_batches_by_barcode(barcode):
+    """
+    Returns all active batches for a specific barcode,
+    ⚠️ UPDATED: Automatically excludes empty batches (0 pills).
+    """
+    try:
+        formula = f"{{Barcode}} = '{barcode}'"
+        records = stock_table.all(formula=formula)
+
+        batches = []
+        for r in records:
+            if hasattr(r, 'fields'):
+                fields = r.fields
+                rec_id = r.id
+            else:
+                fields = r.get('fields', {})
+                rec_id = r.get('id')
+
+            qty = int(fields.get("Current Pills Count", 0))
+
+            # 🔥 تخطي وإهمال أي دفعة كميتها صفر!
+            if qty <= 0:
+                continue
+
+            batches.append({
+                "id": rec_id,
+                "medicine_name": fields.get("Medicine Name", "Unknown"),
+                "expiry_date": fields.get("Expiry Date", "9999-12-31"),
+                "current_quantity": qty,
+                "batch_number": fields.get("A Batch", "N/A")
+            })
+
+        batches.sort(key=lambda x: x['expiry_date'])
+        return batches
+    except Exception as e:
+        print(f"❌ Error fetching all batches: {e}")
+        return []
+
 def add_new_medication(medicine_name, barcode, active_ingredient, dosage, expiry_date,
-                       initial_pills, current_pills, batch_number):
+                       initial_pills, current_pills, batch_number, user_record_id=None):
     """
     Creates a new medication record in the Available_Stock table.
-    The dictionary keys strictly match your exact column names with spaces.
+    Now links the logged-in user who inserted the batch.
     """
     try:
         fields_data = {
@@ -60,17 +115,21 @@ def add_new_medication(medicine_name, barcode, active_ingredient, dosage, expiry
             "Current Pills Count": int(current_pills),
             "A Batch": str(batch_number)
         }
-        new_record = stock_table.create(fields_data)
+
+        # 🔥 إذا تم تمرير الـ record_id للمستخدم، نقوم بربطه كقائمة داخل الحقل المخصص
+        if user_record_id:
+            fields_data["USER"] = [str(user_record_id)]
+
+        new_record = stock_table.create(fields_data, typecast=True)  # تم إضافة typecast لضمان قبول الربط بسلاسة
         print(f"✅ Successfully added new medication: {medicine_name}")
         return new_record
     except Exception as e:
         print(f"❌ Error adding new medication to cloud: {e}")
         return None
 
-
 def update_medication_quantity(record_id, new_pill_count):
     """
-    Updates the current pill count and remaining percentage of an existing medication in the cloud.
+    Updates the current pill count of an existing medication batch in the cloud.
     """
     try:
         fields_to_update = {
@@ -84,16 +143,54 @@ def update_medication_quantity(record_id, new_pill_count):
         return None
 
 
+def update_medication_full_fields(record_id, medicine_name, barcode, active_ingredient, dosage, expiry_date,
+                                  pills_count, batch_number):
+    """
+    Updates all fields of an existing medication record in the Available_Stock table (Correcting mistakes).
+    """
+    try:
+        fields_to_update = {
+            "Medicine Name": str(medicine_name),
+            "Barcode": str(barcode),
+            "Active Ingredient": str(active_ingredient),
+            "Dosage": str(dosage),
+            "Expiry Date": str(expiry_date),  # Format: "YYYY-MM-DD"
+            "Current Pills Count": int(pills_count),
+            "A Batch": str(batch_number)
+        }
+        updated_record = stock_table.update(record_id, fields_to_update, typecast=True)
+        print(f"✅ Successfully updated medication record ID: {record_id}")
+        return updated_record
+    except Exception as e:
+        print(f"❌ Error updating medication in cloud: {e}")
+        return None
+
+
+def delete_medication_record(record_id):
+    """
+    🔥 دالة خاصة بالـ Manager لحذف سجل دواء/دفعة معينة بالكامل من قاعدة البيانات.
+    """
+    try:
+        stock_table.delete(record_id)
+        print(f"🗑️ Successfully purged medication record ID: {record_id}")
+        return True
+    except Exception as e:
+        print(f"❌ Error deleting medication from cloud: {e}")
+        return False
+
+
+# =====================================================================
+# 👥 SYSTEM USERS TABLE FUNCTIONS
+# =====================================================================
+
 def get_all_users():
     """
     Fetches all user records from the system users table in Airtable.
-    Corrected to dynamically handle both object and dict types from pyairtable.
     """
     try:
         records = users_table.all()
         user_list = []
         for record in records:
-            # الفحص الذكي: هل السجل كائن (Object) أم قاموس (Dict)؟
             if hasattr(record, 'fields'):
                 fields = record.fields.copy()
                 fields['record_id'] = record.id
@@ -107,14 +204,13 @@ def get_all_users():
         print(f"❌ Error fetching users from Airtable: {e}")
         return []
 
+
 def add_new_user(username, password, role, pin_code, full_name):
     """
     Creates a new user record in the SYSTEM_USERS table.
-    Uses typecast=True to force Airtable to accept and parse select values safely.
     """
     try:
         clean_role = str(role).strip()
-
         fields_data = {
             "Username": str(username).strip(),
             "Password": str(password).strip(),
@@ -123,16 +219,14 @@ def add_new_user(username, password, role, pin_code, full_name):
             "Full Name": str(full_name).strip(),
             "Last Login": ""
         }
-
         print(f"🚀 Sending payload to Airtable: {fields_data}")
-
         new_record = users_table.create(fields_data, typecast=True)
-
         print(f"✅ Successfully added new user: {username} with role {clean_role}")
         return new_record
     except Exception as e:
         print(f"❌ Error adding new user to cloud: {e}")
         return None
+
 
 def update_user_records(record_id, username, password, role, pin_code, full_name):
     """
@@ -146,7 +240,6 @@ def update_user_records(record_id, username, password, role, pin_code, full_name
             "PIN Code": str(pin_code).strip(),
             "Full Name": str(full_name).strip()
         }
-        # تحديث السجل باستخدام المعرف الفريد وبميزة الـ typecast
         updated_record = users_table.update(record_id, fields_to_update, typecast=True)
         print(f"✅ Successfully updated user record ID: {record_id}")
         return updated_record
@@ -168,17 +261,15 @@ def delete_user_record(record_id):
         return False
 
 
-
 def authenticate_user(username, password):
     """
     Verifies credentials against the cloud table.
-    Returns the user's role string if successful, otherwise None.
     """
     try:
         formula = f"{{Username}} = '{username}'"
         records = users_table.all(formula=formula)
         if records:
-            user_fields = records[0]['fields']
+            user_fields = records[0]['fields'] if hasattr(records[0], 'fields') else records[0].get('fields', {})
             if user_fields.get("Password") == password:
                 return user_fields.get("Role")
         return None
@@ -187,24 +278,22 @@ def authenticate_user(username, password):
         return None
 
 
-# ==========================================
-# HISTORY TABLE FUNCTIONS
-# ==========================================
+# =====================================================================
+# 📝 DISPENSED HISTORY TABLE FUNCTIONS
+# =====================================================================
 
 def log_transaction(action_type, barcode, action_by_user, quantity_taken, removal_reason=""):
     """
     Logs a new transaction to the Dispensed_History table.
-    Safely handles Multiple Select fields like 'Removal Reason' by only including them if provided.
     """
     try:
         fields_data = {
             "Action Type": str(action_type),
             "Barcode": str(barcode),
-            "Action By User": str(action_by_user),  # 🔹 Removed brackets [] here!
+            "Action By User": str(action_by_user),
             "Quantity": int(quantity_taken)
         }
 
-        # Only attach the Reason field if a valid string was provided
         if removal_reason:
             fields_data["Removal Reason"] = [str(removal_reason)]
 
@@ -226,38 +315,3 @@ def get_all_history():
     except Exception as e:
         print(f"❌ Error fetching transaction history: {e}")
         return []
-
-
-def get_all_medications_by_barcode(barcode_value):
-    """
-    Searches for ALL medication records in the cloud based on a unique barcode.
-    Returns a list of records, which can be used to display different batches/expiry dates.
-    """
-    try:
-        formula = f"{{Barcode}} = '{barcode_value}'"
-        records = stock_table.all(formula=formula)
-        return records
-    except Exception as e:
-        print(f"❌ Error searching medications by barcode: {e}")
-        return []
-
-def update_medication_full_fields(record_id, medicine_name, barcode, active_ingredient, dosage, expiry_date, pills_count, batch_number):
-    """
-    Updates all fields of an existing medication record in the Available_Stock table.
-    """
-    try:
-        fields_to_update = {
-            "Medicine Name": str(medicine_name),
-            "Barcode": str(barcode),
-            "Active Ingredient": str(active_ingredient),
-            "Dosage": str(dosage),
-            "Expiry Date": str(expiry_date),  # Format: "YYYY-MM-DD"
-            "Current Pills Count": int(pills_count),  # 🔥 تم تصحيح الاسم هنا ليطابق العمود الفعلي في جدولكِ
-            "A Batch": str(batch_number)
-        }
-        updated_record = stock_table.update(record_id, fields_to_update, typecast=True)
-        print(f"✅ Successfully updated medication record ID: {record_id}")
-        return updated_record
-    except Exception as e:
-        print(f"❌ Error updating medication in cloud: {e}")
-        return None
