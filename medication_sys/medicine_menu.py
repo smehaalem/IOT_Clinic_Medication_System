@@ -123,6 +123,13 @@ class MedicineSystemApp(QWidget):
         view_stock_btn.clicked.connect(self.open_inventory_browser)
         layout.addWidget(view_stock_btn)
 
+        # 👇 הקוד להוספה: כפתור הדוח החדש 👇
+        low_stock_btn = QPushButton("⚠️ Generate Low Stock Report")
+        low_stock_btn.setStyleSheet(self.get_menu_button_style("#8B5CF6", "#7C3AED"))
+        low_stock_btn.clicked.connect(self.launch_low_stock_report)
+        layout.addWidget(low_stock_btn)
+        # 👆 עד כאן ההוספה 👆
+
         manager_btn = QPushButton("🔑 Manager Administration Portal")
         manager_btn.setStyleSheet(self.get_menu_button_style("#D97706", "#B45309"))
         manager_btn.clicked.connect(self.trigger_manager_portal)
@@ -191,6 +198,11 @@ class MedicineSystemApp(QWidget):
             QPushButton:pressed {{ background-color: {press_bg}; }}
         """
 
+    def launch_low_stock_report(self):
+        root = tk.Tk()
+        root.withdraw()  # מסתיר את חלון הבסיס הריק של Tkinter
+        show_low_stock_table()  # קורא לפונקציה מהקובץ שעשינו
+        root.mainloop()  # מריץ את הטבלה בצורה חלקה
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
