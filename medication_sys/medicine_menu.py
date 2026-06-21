@@ -2,7 +2,15 @@ import sys
 import os
 from datetime import datetime
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Updated path resolution to include both project root and Clinic subsystem paths
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(current_dir)
+clinic_dir = os.path.join(root_dir, 'Clinic')
+
+if root_dir not in sys.path:
+    sys.path.append(root_dir)
+if clinic_dir not in sys.path:
+    sys.path.append(clinic_dir)
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
@@ -11,12 +19,18 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QCursor
 
-# 🛠️ استيراد الصفحات من مجلد الشاشات الفرعي
+# Sub-screen imports
 from screen.login_dialog import QuickLoginDialog
 from screen.admin_page import UserManagementPage
 from screen.stock_page import MedicationManagementPage
 from screen.dispense_page import DispenseMedicationPage
-from screen.inventory_view_page import InventoryViewPage  # 🔥 استيراد شاشة جرد المخزون الجديدة
+from screen.inventory_view_page import InventoryViewPage
+
+from inventory_check import show_low_stock_table
+import tkinter as tk
+
+# Import the Kiosk Router from the sibling Clinic directory
+from Clinic.main_gui import KioskRouter
 
 class MedicineSystemApp(QWidget):
     """ Modern Dashboard Layout Navigation Core """
@@ -30,7 +44,7 @@ class MedicineSystemApp(QWidget):
         self.build_main_menu_screen()      # Index 0
         self.build_medicine_sub_menu()     # Index 1
 
-        # ربط الشاشات المستوردة بـ Stack الرئيسي للمشروع
+        # Connect internal sub-pages to the Main Stack Core
         self.admin_page = UserManagementPage(on_back_to_menu=lambda: self.stack.setCurrentIndex(1))
         self.stack.addWidget(self.admin_page)  # Index 2
 
@@ -40,9 +54,13 @@ class MedicineSystemApp(QWidget):
         self.dispense_page = DispenseMedicationPage(on_back_to_menu=lambda: self.stack.setCurrentIndex(1))
         self.stack.addWidget(self.dispense_page)  # Index 4
 
-        # 🔥 تهيئة وربط شاشة استعراض وجرد المخزون الجديدة
         self.inventory_view_page = InventoryViewPage(self, on_back_to_menu=lambda: self.stack.setCurrentIndex(1))
         self.stack.addWidget(self.inventory_view_page)  # Index 5
+
+        # Seamless Integration: Embed KioskRouter inside the existing main window stack framework
+        # When closing/returning from kiosk, it natively switches the index back to the main dashboard (Index 0)
+        self.kiosk_router_page = KioskRouter(on_back_to_main=lambda: self.stack.setCurrentIndex(0))
+        self.stack.addWidget(self.kiosk_router_page)  # Index 6
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -66,13 +84,18 @@ class MedicineSystemApp(QWidget):
         med_btn.clicked.connect(lambda: self.stack.setCurrentIndex(1))
         layout.addWidget(med_btn)
 
+        # Patient Workspace button now cleanly transitions index context without popping extra system frames
         patient_btn = QPushButton("👥 Patient File Workspace")
         patient_btn.setCursor(QCursor(Qt.PointingHandCursor))
         patient_btn.setStyleSheet(self.get_menu_button_style("#475569", "#334155"))
-        patient_btn.clicked.connect(lambda: QMessageBox.information(self, "Workspace", "Loading Patient Records Workspace..."))
+        patient_btn.clicked.connect(self.open_patient_kiosk)
         layout.addWidget(patient_btn)
 
         self.stack.addWidget(page)
+
+    def open_patient_kiosk(self):
+        """ Smoothly transitions the stacked index layer into the embedded Kiosk subsystem """
+        self.stack.setCurrentIndex(6)
 
     def build_medicine_sub_menu(self):
         page = QWidget()
@@ -95,7 +118,6 @@ class MedicineSystemApp(QWidget):
         dispense_btn.clicked.connect(lambda: self.trigger_secure_action("Dispense Medicine"))
         layout.addWidget(dispense_btn)
 
-        # 🔥 زر استعراض المخزون والجرد الجديد بلون أزرق أنيق ومميز
         view_stock_btn = QPushButton("📋 Browse Active Inventory Stores")
         view_stock_btn.setStyleSheet(self.get_menu_button_style("#3B82F6", "#2563EB"))
         view_stock_btn.clicked.connect(self.open_inventory_browser)
@@ -119,36 +141,29 @@ class MedicineSystemApp(QWidget):
     def trigger_secure_action(self, action_name):
         dialog = QuickLoginDialog(self, require_password=False)
         if dialog.exec_() == QDialog.Accepted:
-            # 1️⃣ استخراج قاموس المستخدم الموثق فوراً عند نجاح الدخول
             logged_in_user = dialog.authenticated_user
 
-            # 2️⃣ استخراج المتغيرات الأساسية بشكل صريح ومضمون
             username = logged_in_user.get("Username", "Unknown")
             user_rec_id = logged_in_user.get("record_id") or logged_in_user.get("id")
             full_name_val = logged_in_user.get("Full Name", username)
 
-            # استخراج الصلاحية
             role_val = logged_in_user.get("Role", "User")
             if isinstance(role_val, list):
                 role_val = role_val[0] if role_val else "User"
 
             if action_name == "Add Medicine":
-                # شحن المعرف الصريح لصفحة الـ Stock
                 self.med_management_page.set_current_user(user_rec_id)
                 self.med_management_page.clear_all_fields()
                 self.stack.setCurrentIndex(3)
 
             elif action_name == "Dispense Medicine":
-                # تفعيل وضع الصرف الفوري مع شحن الجلسة (الصلاحية + الاسم الكامل)
                 self.dispense_page.clear_page()
                 self.dispense_page.set_user_session(role_val, full_name_val)
                 self.stack.setCurrentIndex(4)
 
     def open_inventory_browser(self):
-        """ 🔥 تم التحديث: طلب تسجيل الدخول أولاً قبل فتح صفحة جرد المخزون """
         dialog = QuickLoginDialog(self, require_password=False)
         if dialog.exec_() == QDialog.Accepted:
-            # تحديث وجلب البيانات لايف مصفوفة من الأقرب للانتهاء للأبعد ثم الانتقال
             self.inventory_view_page.refresh_inventory_data()
             self.stack.setCurrentIndex(5)
 
