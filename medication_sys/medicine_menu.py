@@ -7,7 +7,8 @@ from PyQt5.QtGui import QCursor
 from screen.login_dialog import QuickLoginDialog
 from screen.admin_page import UserManagementPage
 from screen.stock_page import MedicationManagementPage
-from screen.dispense_page import DispenseMedicationPage  # 🔥 استيراد شاشة الصرف الجديدة
+from screen.dispense_page import DispenseMedicationPage
+from screen.inventory_view_page import InventoryViewPage  # 🔥 استيراد شاشة جرد المخزون الجديدة
 
 class MedicineSystemApp(QWidget):
     """ Modern Dashboard Layout Navigation Core """
@@ -29,7 +30,11 @@ class MedicineSystemApp(QWidget):
         self.stack.addWidget(self.med_management_page)  # Index 3
 
         self.dispense_page = DispenseMedicationPage(on_back_to_menu=lambda: self.stack.setCurrentIndex(1))
-        self.stack.addWidget(self.dispense_page)  # Index 4 🔥 ربط شاشة الصرف الجديدة
+        self.stack.addWidget(self.dispense_page)  # Index 4
+
+        # 🔥 تهيئة وربط شاشة استعراض وجرد المخزون الجديدة
+        self.inventory_view_page = InventoryViewPage(self, on_back_to_menu=lambda: self.stack.setCurrentIndex(1))
+        self.stack.addWidget(self.inventory_view_page)  # Index 5
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -77,15 +82,21 @@ class MedicineSystemApp(QWidget):
         add_med_btn.clicked.connect(lambda: self.trigger_secure_action("Add Medicine"))
         layout.addWidget(add_med_btn)
 
-        manager_btn = QPushButton("🔑 Manager Administration Portal")
-        manager_btn.setStyleSheet(self.get_menu_button_style("#D97706", "#B45309"))
-        manager_btn.clicked.connect(self.trigger_manager_portal)
-        layout.addWidget(manager_btn)
-
         dispense_btn = QPushButton("📦 Dispense / Deduct Quantity")
         dispense_btn.setStyleSheet(self.get_menu_button_style("#EF4444", "#DC2626"))
         dispense_btn.clicked.connect(lambda: self.trigger_secure_action("Dispense Medicine"))
         layout.addWidget(dispense_btn)
+
+        # 🔥 زر استعراض المخزون والجرد الجديد بلون أزرق أنيق ومميز
+        view_stock_btn = QPushButton("📋 Browse Active Inventory Stores")
+        view_stock_btn.setStyleSheet(self.get_menu_button_style("#3B82F6", "#2563EB"))
+        view_stock_btn.clicked.connect(self.open_inventory_browser)
+        layout.addWidget(view_stock_btn)
+
+        manager_btn = QPushButton("🔑 Manager Administration Portal")
+        manager_btn.setStyleSheet(self.get_menu_button_style("#D97706", "#B45309"))
+        manager_btn.clicked.connect(self.trigger_manager_portal)
+        layout.addWidget(manager_btn)
 
         back_btn = QPushButton("⬅️ Return to Main Menu")
         back_btn.setStyleSheet("""
@@ -124,6 +135,11 @@ class MedicineSystemApp(QWidget):
                 self.dispense_page.clear_page()
                 self.dispense_page.set_user_session(role_val, full_name_val)
                 self.stack.setCurrentIndex(4)
+
+    def open_inventory_browser(self):
+        """ فتح شاشة جرد المخزون وتحديث البيانات لايف تلقائياً """
+        self.inventory_view_page.refresh_inventory_data()
+        self.stack.setCurrentIndex(5)
 
     def trigger_manager_portal(self):
         dialog = QuickLoginDialog(self, require_password=True)

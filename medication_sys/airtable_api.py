@@ -62,14 +62,14 @@ def get_all_medications_by_barcode(barcode_value):
 
 def find_all_batches_by_barcode(barcode):
     """
-    Returns all active batches for a specific barcode,
-    ⚠️ UPDATED: Automatically excludes empty batches (0 pills).
+    Returns all active batches for a specific barcode.
+    Uses 'Barcode lookup' field instead of linked Barcode field.
     """
     try:
-        formula = f"{{Barcode}} = '{barcode}'"
-        records = stock_table.all(formula=formula)
+        records = stock_table.all()
 
         batches = []
+
         for r in records:
             if hasattr(r, 'fields'):
                 fields = r.fields
@@ -78,9 +78,17 @@ def find_all_batches_by_barcode(barcode):
                 fields = r.get('fields', {})
                 rec_id = r.get('id')
 
+            lookup_value = fields.get("Barcode lookup", [])
+
+            # Airtable Lookup fields usually return a list
+            if isinstance(lookup_value, list):
+                lookup_value = str(lookup_value[0]) if lookup_value else ""
+
+            if str(lookup_value).strip() != str(barcode).strip():
+                continue
+
             qty = int(fields.get("Current Pills Count", 0))
 
-            # 🔥 تخطي وإهمال أي دفعة كميتها صفر!
             if qty <= 0:
                 continue
 
@@ -92,11 +100,13 @@ def find_all_batches_by_barcode(barcode):
                 "batch_number": fields.get("A Batch", "N/A")
             })
 
-        batches.sort(key=lambda x: x['expiry_date'])
+        batches.sort(key=lambda x: x["expiry_date"])
         return batches
+
     except Exception as e:
         print(f"❌ Error fetching all batches: {e}")
         return []
+
 
 def add_new_medication(medicine_name, barcode, active_ingredient, dosage, expiry_date,
                        initial_pills, current_pills, batch_number, user_record_id=None):

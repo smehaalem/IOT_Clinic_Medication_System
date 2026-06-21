@@ -4,13 +4,14 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from PyQt5.QtWidgets import QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QCursor
 import airtable_api
 
+
 class QuickLoginDialog(QDialog):
-    """ Modern, elegant Pop-up Authentication Gate """
-    # 🔥 تعريف الدالة بشكل صريح وبدون *args أو **kwargs لمنع الـ TypeError
+    """ Modern Pop-up Gate - Keyboard Hidden by Default, Opens ONLY on Click/Touch """
+
     def __init__(self, parent=None, require_password=False):
         super().__init__(parent)
         self.require_password = require_password
@@ -20,27 +21,27 @@ class QuickLoginDialog(QDialog):
 
     def init_ui(self):
         self.setWindowTitle("Security Verification")
-        self.setFixedWidth(460)
+        self.setFixedWidth(420)
         self.setStyleSheet("""
             QDialog { background-color: #F8FAFC; }
-            QLabel { color: #1E293B; font-size: 13px; font-weight: 500; font-family: 'Segoe UI'; }
+            QLabel { color: #1E293B; font-size: 11px; font-weight: 500; font-family: 'Segoe UI'; }
             QLineEdit { 
-                padding: 12px; 
-                border: 2px solid #E2E8F0; 
-                border-radius: 10px; 
-                font-size: 14px; 
+                padding: 6px; 
+                border: 1px solid #CBD5E1; 
+                border-radius: 6px; 
+                font-size: 12px; 
                 background-color: #FFFFFF;
                 color: #0F172A;
             }
-            QLineEdit:focus { border: 2px solid #6366F1; background-color: #F5F3FF; }
+            QLineEdit:focus { border: 2px solid #4F46E5; background-color: #F5F3FF; font-weight: bold; }
         """)
 
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(4)
 
         title = QLabel("Security Gate")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #4F46E5; margin-bottom: 5px;")
+        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #4F46E5; margin-bottom: 2px;")
         title.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(title)
 
@@ -68,50 +69,62 @@ class QuickLoginDialog(QDialog):
         verify_btn.setCursor(QCursor(Qt.PointingHandCursor))
         verify_btn.setStyleSheet("""
             QPushButton {
-                background-color: #4F46E5; color: white; padding: 14px; 
-                font-size: 15px; font-weight: bold; border-radius: 10px; border: none;
+                background-color: #4F46E5; color: white; padding: 10px; 
+                font-size: 13px; font-weight: bold; border-radius: 6px; border: none;
+                margin-top: 4px;
             }
             QPushButton:pressed { background-color: #4338CA; }
         """)
         verify_btn.clicked.connect(self.handle_verification)
         main_layout.addWidget(verify_btn)
 
-        keyboard_widget = QWidget()
-        keyboard_layout = QVBoxLayout(keyboard_widget)
-        keyboard_layout.setContentsMargins(0, 10, 0, 0)
-        keyboard_layout.setSpacing(6)
+        # ⌨️ حاوية لوحة المفاتيح
+        self.keyboard_widget = QWidget()
+        keyboard_layout = QVBoxLayout(self.keyboard_widget)
+        keyboard_layout.setContentsMargins(0, 4, 0, 0)
+        keyboard_layout.setSpacing(4)
 
         rows = [
             ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
             ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
             ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', '-'],
-            ['z', 'x', 'c', 'v', 'b', 'n', 'm', '🔑 admin', 'Clear', '⌫']
+            ['z', 'x', 'c', 'v', 'b', 'n', 'm', '🔑 admin', 'Clear', '⌫', '🔽 Hide']
         ]
 
         for row in rows:
             row_layout = QHBoxLayout()
-            row_layout.setSpacing(5)
+            row_layout.setSpacing(4)
             for key in row:
                 btn = QPushButton(key)
                 btn.setFocusPolicy(Qt.NoFocus)
                 btn.setCursor(QCursor(Qt.PointingHandCursor))
 
-                if key in ['Clear', '⌫', '🔑 admin']:
+                if key in ['Clear', '⌫', '🔑 admin', '🔽 Hide']:
                     btn.setStyleSheet("""
-                        QPushButton { background-color: #E2E8F0; color: #334155; font-weight: bold; padding: 10px; border-radius: 8px; border: none; font-size: 12px; }
+                        QPushButton { background-color: #E2E8F0; color: #334155; font-weight: bold; padding: 10px 2px; border-radius: 5px; border: none; font-size: 10px; }
                         QPushButton:pressed { background-color: #CBD5E1; }
                     """)
                 else:
                     btn.setStyleSheet("""
-                        QPushButton { background-color: #FFFFFF; color: #1E293B; font-weight: 600; padding: 10px; border-radius: 8px; border: 1px solid #E2E8F0; font-size: 14px; }
+                        QPushButton { background-color: #FFFFFF; color: #1E293B; font-weight: 600; padding: 10px 2px; border-radius: 5px; border: 1px solid #E2E8F0; font-size: 12px; }
                         QPushButton:pressed { background-color: #F1F5F9; border: 1px solid #CBD5E1; }
                     """)
                 btn.clicked.connect(lambda checked, k=key: self.handle_key_press(k))
                 row_layout.addWidget(btn)
             keyboard_layout.addLayout(row_layout)
 
-        main_layout.addWidget(keyboard_widget)
+        main_layout.addWidget(self.keyboard_widget)
 
+        # 🔐 مخفي تماماً عند التشغيل الأولي (By Default)
+        self.keyboard_widget.hide()
+
+        # 🔥 تفعيل الـ Event Filter فقط في آخر الدالة بعد ضمان جرد وبناء كل الـ Objects بسلام
+        self.username_input.installEventFilter(self)
+        self.pin_input.installEventFilter(self)
+        if self.require_password:
+            self.password_input.installEventFilter(self)
+
+        # إعطاء تركيز مبدئي صامت بدون إظهار الكيبورد
         self.current_focused_input = self.username_input
         self.username_input.setFocus()
 
@@ -121,17 +134,33 @@ class QuickLoginDialog(QDialog):
         input_field.setFocus(Qt.OtherFocusReason)
         input_field.setCursorPosition(len(input_field.text()))
 
+    def eventFilter(self, obj, event):
+        # حماية شاملة: تأكدي أولاً من أن الحقول قد تم تهيئتها بالكامل بالذاكرة قبل المقارنة
+        u_input = getattr(self, 'username_input', None)
+        p_input = getattr(self, 'pin_input', None)
+        pass_input = getattr(self, 'password_input', None)
+
+        if obj in [u_input, p_input, pass_input] and obj is not None:
+            if event.type() in [QEvent.MouseButtonPress, QEvent.MouseButtonRelease]:
+                self.keyboard_widget.show()
+        return super().eventFilter(obj, event)
+
     def handle_key_press(self, key):
         if not self.current_focused_input: return
         current_text = self.current_focused_input.text()
+
         if key == '⌫':
             self.current_focused_input.setText(current_text[:-1])
         elif key == 'Clear':
             self.current_focused_input.clear()
         elif key == '🔑 admin':
             self.current_focused_input.setText("admin")
+        elif key == '🔽 Hide':
+            self.keyboard_widget.hide()
+            return
         else:
             self.current_focused_input.setText(current_text + key)
+
         self.current_focused_input.setFocus(Qt.OtherFocusReason)
         self.current_focused_input.setCursorPosition(len(self.current_focused_input.text()))
 

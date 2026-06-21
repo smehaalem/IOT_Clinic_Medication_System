@@ -1,111 +1,78 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSpacerItem, QSizePolicy
-from PyQt5.QtGui import QPixmap, QFont
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QStackedWidget
+from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
-import printer_engine
 
-class KioskApp(QWidget):
+# Import the individual screens
+from new_patient_gui import NewPatientScreen
+from checkin_gui import CheckinScreen
+
+class MainMenuScreen(QWidget):
+    """ The Main Menu UI """
+    def __init__(self, stack):
+        super().__init__()
+        self.stack = stack
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignCenter)
+
+        title = QLabel("Smart Clinic Kiosk")
+        title.setFont(QFont("Arial", 30, QFont.Bold))
+        title.setAlignment(Qt.AlignCenter)
+
+        # Button to register a new patient
+        btn_new = QPushButton("New Patient (Print ID)")
+        btn_new.setFixedSize(400, 100)
+        btn_new.setFont(QFont("Arial", 18))
+        btn_new.clicked.connect(lambda: self.stack.setCurrentIndex(1))
+
+        # Button for returning patients (barcode scan)
+        btn_checkin = QPushButton("Returning Patient (Scan ID)")
+        btn_checkin.setFixedSize(400, 100)
+        btn_checkin.setFont(QFont("Arial", 18))
+        btn_checkin.clicked.connect(self.go_to_checkin)
+
+        layout.addWidget(title)
+        layout.addSpacing(50)
+        layout.addWidget(btn_new, alignment=Qt.AlignCenter)
+        layout.addSpacing(20)
+        layout.addWidget(btn_checkin, alignment=Qt.AlignCenter)
+
+        self.setLayout(layout)
+
+    def go_to_checkin(self):
+        # Prepare the check-in screen (clear text and focus scanner input) before switching
+        checkin_widget = self.stack.widget(2)
+        checkin_widget.prepare_for_scan()
+        self.stack.setCurrentIndex(2)
+
+class KioskRouter(QWidget):
+    """ The Router that holds all screens using QStackedWidget """
     def __init__(self):
         super().__init__()
-        self.image_path = 'label.png'
-        self.initUI()
+        self.setWindowTitle('Smart Clinic - Patient Kiosk')
+        self.stack = QStackedWidget(self)
 
-    def initUI(self):
-        self.setWindowTitle('Patient ID Kiosk')
-        
-        # Main vertical layout
-        self.main_layout = QVBoxLayout()
-        self.main_layout.setContentsMargins(15, 15, 15, 15)
+        # Initialize screens and pass the stack reference for navigation
+        self.main_menu = MainMenuScreen(self.stack)
+        self.new_patient = NewPatientScreen(self.stack)
+        self.checkin = CheckinScreen(self.stack)
 
-        # Input fields for patient details
-        self.first_input = QLineEdit()
-        self.first_input.setPlaceholderText("First Name")
-        self.last_input = QLineEdit()
-        self.last_input.setPlaceholderText("Last Name")
-        self.id_input = QLineEdit()
-        self.id_input.setPlaceholderText("ID Number")
+        # Add screens to stack
+        self.stack.addWidget(self.main_menu)   # Index 0
+        self.stack.addWidget(self.new_patient) # Index 1
+        self.stack.addWidget(self.checkin)     # Index 2
 
-        self.main_layout.addWidget(QLabel("Enter Details:"))
-        self.main_layout.addWidget(self.first_input)
-        self.main_layout.addWidget(self.last_input)
-        self.main_layout.addWidget(self.id_input)
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(self.stack)
+        self.setLayout(main_layout)
 
-        # Preview button
-        self.generate_btn = QPushButton("Preview Label")
-        self.generate_btn.clicked.connect(self.generate_preview)
-        self.main_layout.addWidget(self.generate_btn)
-
-        # Image preview label
-        self.image_preview = QLabel("Label preview will appear here")
-        self.image_preview.setAlignment(Qt.AlignCenter)
-        self.main_layout.addWidget(self.image_preview)
-
-        # Spacer to maintain layout integrity and push buttons down nicely
-        self.spacer = QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        self.main_layout.addItem(self.spacer)
-
-        # Print and Cancel buttons layout
-        self.button_layout = QHBoxLayout()
-        self.print_btn = QPushButton("Print (Yes)")
-        self.print_btn.clicked.connect(self.action_print)
-        self.cancel_btn = QPushButton("Cancel (No)")
-        self.cancel_btn.clicked.connect(self.reset_ui)
-        
-        self.button_layout.addWidget(self.print_btn)
-        self.button_layout.addWidget(self.cancel_btn)
-        self.main_layout.addLayout(self.button_layout)
-        
-        self.setLayout(self.main_layout)
-        self.print_btn.hide()
-        self.cancel_btn.hide()
-
-    def generate_preview(self):
-        # Collect data from fields
-        data = {
-            "first": self.first_input.text(),
-            "last": self.last_input.text(),
-            "id": self.id_input.text()
-        }
-        
-        # Ensure at least one field is filled
-        if not any(data.values()):
-            self.image_preview.setText("Error: Please fill at least one field!")
-            return
-
-        # Use the printer engine to create the label image
-        printer_engine.create_label(data, self.image_path)
-        
-        # Load and display the created image
-        pixmap = QPixmap(self.image_path)
-        
-        # Scale the preview smaller so it fits perfectly on the screen with the buttons
-        self.image_preview.setPixmap(pixmap.scaled(300, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        
-        # Show buttons safely without shifting the window layout
-        self.print_btn.show()
-        self.cancel_btn.show()
-
-    def action_print(self):
-        # Trigger the printing process
-        printer_engine.print_label(self.image_path)
-        self.reset_ui()
-
-    def reset_ui(self):
-        # Clear fields and reset state
-        self.first_input.clear()
-        self.last_input.clear()
-        self.id_input.clear()
-        self.image_preview.setText("Preview will appear here")
-        self.print_btn.hide()
-        self.cancel_btn.hide()
+        # Open in fullscreen/maximized mode
+        self.showMaximized()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    ex = KioskApp()
-    
-    # FIX: Open the window in standard Maximized mode.
-    # This keeps the original title bar, standard Maximize/Close buttons,
-    # and leaves the top taskbar visible for your virtual keyboard.
-    ex.showMaximized()
-    
+    ex = KioskRouter()
     sys.exit(app.exec_())

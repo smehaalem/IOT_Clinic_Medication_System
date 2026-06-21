@@ -9,13 +9,13 @@ from PyQt5.QtWidgets import (
     QPushButton, QTableWidget, QTableWidgetItem, QComboBox,
     QFrame, QMessageBox, QHeaderView
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QCursor
 import airtable_api
 
 
 class UserManagementPage(QWidget):
-    """ Modernized & Touch-Optimized Admin Panel Workspace with Dynamic Highlights """
+    """ Modernized & Touch-Optimized Admin Panel Workspace with Dynamic Trigger Keyboard """
 
     def __init__(self, parent=None, on_back_to_menu=None):
         super().__init__(parent)
@@ -25,7 +25,7 @@ class UserManagementPage(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        # تطبيق ستايل عام فخم ومريح للعين
+        # تطبيق ستايل عام فخم ومريح للعين بمقاسات مضغوطة تلائم الرازبري باي
         self.setStyleSheet("""
             QWidget { 
                 background-color: #F8FAFC; 
@@ -33,44 +33,51 @@ class UserManagementPage(QWidget):
                 color: #1E293B; 
             }
             QLabel { 
-                font-size: 13px; 
+                font-size: 11px; 
                 font-weight: 600; 
                 color: #475569; 
             }
+            QLineEdit {
+                padding: 6px;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                font-size: 11px;
+                background-color: #F8FAFC;
+            }
             QComboBox { 
-                padding: 10px; 
-                border: 2px solid #E2E8F0; 
-                border-radius: 10px; 
+                padding: 6px; 
+                border: 1px solid #E2E8F0; 
+                border-radius: 6px; 
                 background-color: #FFFFFF; 
-                font-size: 13px;
+                font-size: 11px;
             }
             QComboBox:focus { border: 2px solid #6366F1; }
         """)
 
         main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(5, 5, 5, 5)  # هوامش ضيقة للشاشة الصغيرة
+        main_layout.setSpacing(10)
 
         # =====================================================================
         # 📊 LEFT SIDE: Directory Table View (Card Style)
         # =====================================================================
         left_container = QFrame()
-        left_container.setStyleSheet("background-color: #FFFFFF; border-radius: 16px; border: 1px solid #E2E8F0;")
+        left_container.setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;")
         left_layout = QVBoxLayout(left_container)
-        left_layout.setContentsMargins(15, 15, 15, 15)
-        left_layout.setSpacing(12)
+        left_layout.setContentsMargins(10, 10, 10, 10)
+        left_layout.setSpacing(8)
 
         header_layout = QHBoxLayout()
         table_title = QLabel("👥 Active Staff Directory")
         table_title.setStyleSheet(
-            "font-size: 20px; font-weight: bold; color: #0F172A; border: none; background: transparent;")
+            "font-size: 15px; font-weight: bold; color: #0F172A; border: none; background: transparent;")
 
-        back_btn = QPushButton("⬅️ Back to Menu")
+        back_btn = QPushButton("⬅️ Back")
         back_btn.setCursor(QCursor(Qt.PointingHandCursor))
         back_btn.setStyleSheet("""
             QPushButton { 
-                padding: 8px 16px; background-color: #F1F5F9; border-radius: 8px; 
-                font-weight: bold; border: 1px solid #E2E8F0; color: #475569; font-size: 13px;
+                padding: 4px 10px; background-color: #F1F5F9; border-radius: 6px; 
+                font-weight: bold; border: 1px solid #E2E8F0; color: #475569; font-size: 11px;
             }
             QPushButton:hover { background-color: #E2E8F0; }
         """)
@@ -81,28 +88,28 @@ class UserManagementPage(QWidget):
         header_layout.addWidget(back_btn)
         left_layout.addLayout(header_layout)
 
-        # تصميم الجدول بشكل مودرن
+        # تصميم الجدول بشكل مودرن مدمج للرازبري
         self.users_table_widget = QTableWidget()
         self.users_table_widget.setColumnCount(3)
-        self.users_table_widget.setHorizontalHeaderLabels(["Username", "System Role", "Actions ⚙️"])
+        self.users_table_widget.setHorizontalHeaderLabels(["Username", "Role", "Actions"])
         self.users_table_widget.setFrameShape(QFrame.NoFrame)
         self.users_table_widget.setSelectionBehavior(QTableWidget.SelectRows)
         self.users_table_widget.setEditTriggers(QTableWidget.NoEditTriggers)
 
-        # توزيع مساحات الأعمدة التلقائي بالتساوي وبأناقة
         header = self.users_table_widget.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         header.setSectionResizeMode(2, QHeaderView.Fixed)
-        self.users_table_widget.setColumnWidth(2, 120)
+        self.users_table_widget.setColumnWidth(2, 90)  # تقليص العرض للأزرار
+        self.users_table_widget.verticalHeader().setDefaultSectionSize(28)  # تقليل ارتفاع السجل للبرس بلمسة
 
         self.users_table_widget.setStyleSheet("""
-            QTableWidget { background-color: #FFFFFF; color: #334155; font-size: 14px; }
+            QTableWidget { background-color: #FFFFFF; color: #334155; font-size: 11px; }
             QHeaderView::section { 
                 background-color: #F8FAFC; font-weight: bold; border: none; 
-                padding: 10px; color: #64748B; font-size: 13px; border-bottom: 2px solid #E2E8F0;
+                padding: 6px; color: #64748B; font-size: 11px; border-bottom: 2px solid #E2E8F0;
             }
-            QTableWidget::item { padding: 10px; border-bottom: 1px solid #F1F5F9; }
+            QTableWidget::item { padding: 4px; border-bottom: 1px solid #F1F5F9; }
             QTableWidget::item:selected { background-color: #EEF2FF; color: #4F46E5; }
         """)
         left_layout.addWidget(self.users_table_widget)
@@ -111,8 +118,8 @@ class UserManagementPage(QWidget):
         refresh_btn.setCursor(QCursor(Qt.PointingHandCursor))
         refresh_btn.setStyleSheet("""
             QPushButton { 
-                padding: 12px; font-size: 14px; font-weight: bold; background-color: #F8FAFC; 
-                border: 1px solid #CBD5E1; border-radius: 10px; color: #475569;
+                padding: 8px; font-size: 12px; font-weight: bold; background-color: #F8FAFC; 
+                border: 1px solid #CBD5E1; border-radius: 8px; color: #475569;
             }
             QPushButton:hover { background-color: #F1F5F9; }
         """)
@@ -124,14 +131,14 @@ class UserManagementPage(QWidget):
         # 📝 RIGHT SIDE: Operations & Input Form Card
         # =====================================================================
         right_container = QFrame()
-        right_container.setStyleSheet("background-color: #FFFFFF; border-radius: 16px; border: 1px solid #E2E8F0;")
+        right_container.setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;")
         right_layout = QVBoxLayout(right_container)
-        right_layout.setContentsMargins(15, 15, 15, 15)
-        right_layout.setSpacing(6)
+        right_layout.setContentsMargins(10, 10, 10, 10)
+        right_layout.setSpacing(4)
 
         self.form_title = QLabel("Register New System Account")
         self.form_title.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #4F46E5; margin-bottom: 5px; border: none; background: transparent;")
+            "font-size: 13px; font-weight: bold; color: #4F46E5; margin-bottom: 2px; border: none; background: transparent;")
         right_layout.addWidget(self.form_title)
 
         right_layout.addWidget(QLabel("Full Name"))
@@ -167,8 +174,8 @@ class UserManagementPage(QWidget):
         self.submit_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.submit_btn.setStyleSheet("""
             QPushButton { 
-                background-color: #4F46E5; color: white; padding: 14px; 
-                font-weight: bold; border-radius: 10px; border: none; font-size: 14px; margin-top: 5px;
+                background-color: #4F46E5; color: white; padding: 10px; 
+                font-weight: bold; border-radius: 8px; border: none; font-size: 12px; margin-top: 2px;
             }
             QPushButton:pressed { background-color: #4338CA; }
         """)
@@ -178,7 +185,7 @@ class UserManagementPage(QWidget):
         self.cancel_edit_btn = QPushButton("❌ Cancel Form Editing")
         self.cancel_edit_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.cancel_edit_btn.setStyleSheet("""
-            QPushButton { background-color: #EF4444; color: white; padding: 10px; font-weight: 600; border-radius: 10px; border: none; }
+            QPushButton { background-color: #EF4444; color: white; padding: 6px; font-weight: 600; border-radius: 8px; border: none; font-size: 11px; }
             QPushButton:pressed { background-color: #DC2626; }
         """)
         self.cancel_edit_btn.clicked.connect(self.reset_form_state)
@@ -188,32 +195,32 @@ class UserManagementPage(QWidget):
         # =====================================================================
         # ⌨️ EMBEDDED VIRTUAL KEYBOARD (Premium Styled)
         # =====================================================================
-        right_layout.addWidget(QLabel("Form Touch Input Workspace:"))
-        keyboard_widget = QWidget()
-        keyboard_widget.setStyleSheet("border: none; background: transparent;")
-        keyboard_layout = QVBoxLayout(keyboard_widget)
-        keyboard_layout.setContentsMargins(0, 2, 0, 0)
-        keyboard_layout.setSpacing(4)
+        right_layout.addWidget(QLabel("Touch Entry Pad:"))
+        self.keyboard_widget = QWidget()
+        self.keyboard_widget.setStyleSheet("border: none; background: transparent;")
+        keyboard_layout = QVBoxLayout(self.keyboard_widget)
+        keyboard_layout.setContentsMargins(0, 0, 0, 0)
+        keyboard_layout.setSpacing(3)
 
         rows = [
             ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
             ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
             ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', '-'],
-            ['z', 'x', 'c', 'v', 'b', 'n', 'm', ' ', 'Clear', '⌫']
+            ['z', 'x', 'c', 'v', 'b', 'n', 'm', ' ', 'Clear', '⌫', '🔽 Hide']
         ]
 
         for row in rows:
             row_layout = QHBoxLayout()
-            row_layout.setSpacing(4)
+            row_layout.setSpacing(3)
             for key in row:
                 btn = QPushButton(key)
                 btn.setFocusPolicy(Qt.NoFocus)
                 btn.setCursor(QCursor(Qt.PointingHandCursor))
-                if key in ['Clear', '⌫']:
+                if key in ['Clear', '⌫', '🔽 Hide']:
                     btn.setStyleSheet("""
                         QPushButton { 
                             background-color: #CBD5E1; color: #1E293B; font-weight: bold; 
-                            padding: 10px 4px; border-radius: 8px; border: none; font-size: 13px; 
+                            padding: 10px 2px; border-radius: 4px; border: none; font-size: 11px; 
                         }
                         QPushButton:pressed { background-color: #94A3B8; }
                     """)
@@ -222,7 +229,7 @@ class UserManagementPage(QWidget):
                     btn.setStyleSheet("""
                         QPushButton { 
                             background-color: #F1F5F9; color: #1E293B; font-weight: bold; 
-                            padding: 10px 4px; border-radius: 8px; border: 1px solid #E2E8F0; min-width: 60px; font-size: 13px; 
+                            padding: 10px 2px; border-radius: 4px; border: 1px solid #E2E8F0; min-width: 40px; font-size: 11px; 
                         }
                         QPushButton:pressed { background-color: #E2E8F0; }
                     """)
@@ -230,7 +237,7 @@ class UserManagementPage(QWidget):
                     btn.setStyleSheet("""
                         QPushButton { 
                             background-color: #F1F5F9; color: #1E293B; font-weight: 600; 
-                            padding: 10px 4px; border-radius: 8px; border: 1px solid #E2E8F0; font-size: 14px; 
+                            padding: 10px 2px; border-radius: 4px; border: 1px solid #E2E8F0; font-size: 11px; 
                         }
                         QPushButton:pressed { background-color: #E2E8F0; }
                     """)
@@ -238,29 +245,45 @@ class UserManagementPage(QWidget):
                 row_layout.addWidget(btn)
             keyboard_layout.addLayout(row_layout)
 
-        right_layout.addWidget(keyboard_widget)
+        right_layout.addWidget(self.keyboard_widget)
         main_layout.addWidget(right_container, stretch=4)
 
-        # تفعيل الإضاءة والفوكس على الحقل الأول بدئياً
+        # 🔐 إخفاء الكيبورد بشكل افتراضي في البداية وتثبيت الـ Event Filters بأمان تام
+        self.keyboard_widget.hide()
+
+        self.fullname_input.installEventFilter(self)
+        self.username_input.installEventFilter(self)
+        self.password_input.installEventFilter(self)
+        self.pincode_input.installEventFilter(self)
+
         self.reset_form_state()
 
     def handle_input_focus(self, input_field, event):
-        """ تسليط الضوء بلون بنفسجي مضيء على الحقل المختار وتفعيل مؤشر الكتابة """
-        # إرجاع كافة الحقول للستايل العادي أولاً لتنظيف الواجهة
         for input_box in [self.fullname_input, self.username_input, self.password_input, self.pincode_input]:
             if input_box != input_field:
                 input_box.setStyleSheet(
-                    "padding: 10px; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 13px; background-color: #F8FAFC; color: #1E293B;")
+                    "padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 11px; background-color: #F8FAFC; color: #1E293B;")
 
         self.current_focused_input = input_field
         if event:
             super(QLineEdit, input_field).focusInEvent(event)
 
-        # 🔥 إضاءة الحقل النشط حالياً
         input_field.setStyleSheet(
-            "padding: 10px; border: 2px solid #6366F1; border-radius: 8px; font-size: 13px; background-color: #F5F3FF; color: #0F172A;")
+            "padding: 6px; border: 2px solid #6366F1; border-radius: 6px; font-size: 11px; background-color: #F5F3FF; color: #0F172A;")
         input_field.setFocus(Qt.OtherFocusReason)
         input_field.setCursorPosition(len(input_field.text()))
+
+    def eventFilter(self, obj, event):
+        # التقاط حدث النقرة أو اللمس الفعلي داخل الـ LineEdits لإظهار الكيبورد
+        f_in = getattr(self, 'fullname_input', None)
+        u_in = getattr(self, 'username_input', None)
+        p_in = getattr(self, 'password_input', None)
+        pin_in = getattr(self, 'pincode_input', None)
+
+        if obj in [f_in, u_in, p_in, pin_in] and obj is not None:
+            if event.type() in [QEvent.MouseButtonPress, QEvent.MouseButtonRelease]:
+                self.keyboard_widget.show()
+        return super().eventFilter(obj, event)
 
     def handle_key_press(self, key):
         if not self.current_focused_input: return
@@ -270,13 +293,15 @@ class UserManagementPage(QWidget):
             self.current_focused_input.setText(current_text[:-1])
         elif key == 'Clear':
             self.current_focused_input.clear()
+        elif key == '🔽 Hide':
+            self.keyboard_widget.hide()
+            return
         else:
             self.current_focused_input.setText(current_text + key)
 
-        # الحفاظ على إضاءة الفوكس النشط أثناء الكتابة من الكيبورد الوهمي
         self.current_focused_input.setFocus(Qt.OtherFocusReason)
         self.current_focused_input.setStyleSheet(
-            "padding: 10px; border: 2px solid #6366F1; border-radius: 8px; font-size: 13px; background-color: #F5F3FF; color: #0F172A;")
+            "padding: 6px; border: 2px solid #6366F1; border-radius: 6px; font-size: 11px; background-color: #F5F3FF; color: #0F172A;")
         self.current_focused_input.setCursorPosition(len(self.current_focused_input.text()))
 
     def load_users_data(self):
@@ -296,28 +321,23 @@ class UserManagementPage(QWidget):
                 self.users_table_widget.setItem(row_idx, 0, u_item)
                 self.users_table_widget.setItem(row_idx, 1, r_item)
 
-                # أزرار العمليات داخل الجدول بتصميم مودرن
                 actions_widget = QWidget()
                 actions_widget.setStyleSheet("background-color: transparent;")
                 actions_layout = QHBoxLayout(actions_widget)
-                actions_layout.setContentsMargins(4, 2, 4, 2)
-                actions_layout.setSpacing(8)
+                actions_layout.setContentsMargins(2, 1, 2, 1)
+                actions_layout.setSpacing(4)
 
                 edit_icon_btn = QPushButton("✏️")
-                edit_icon_btn.setFixedSize(32, 32)
-                edit_icon_btn.setCursor(QCursor(Qt.PointingHandCursor))
+                edit_icon_btn.setFixedSize(24, 24)
                 edit_icon_btn.setStyleSheet("""
-                    QPushButton { background-color: #0EA5E9; color: white; border-radius: 6px; font-weight: bold; border: none; }
-                    QPushButton:pressed { background-color: #0284C7; }
+                    QPushButton { background-color: #0EA5E9; color: white; border-radius: 4px; font-size: 11px; border: none; }
                 """)
                 edit_icon_btn.clicked.connect(lambda checked, u=user_data: self.prepare_edit_user(u))
 
                 delete_icon_btn = QPushButton("🗑️")
-                delete_icon_btn.setFixedSize(32, 32)
-                delete_icon_btn.setCursor(QCursor(Qt.PointingHandCursor))
+                delete_icon_btn.setFixedSize(24, 24)
                 delete_icon_btn.setStyleSheet("""
-                    QPushButton { background-color: #EF4444; color: white; border-radius: 6px; font-weight: bold; border: none; }
-                    QPushButton:pressed { background-color: #DC2626; }
+                    QPushButton { background-color: #EF4444; color: white; border-radius: 4px; font-size: 11px; border: none; }
                 """)
                 delete_icon_btn.clicked.connect(lambda checked, u=user_data: self.handle_delete_user(u))
 
@@ -341,16 +361,17 @@ class UserManagementPage(QWidget):
         index = self.role_combobox.findText(str(role_val))
         if index >= 0: self.role_combobox.setCurrentIndex(index)
 
-        # تحويل حالة النموذج لوضع التعديل (Orange Accent)
         self.form_title.setText("📝 Edit System Account")
         self.form_title.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #EA580C; margin-bottom: 2px; border: none; background: transparent;")
+            "font-size: 13px; font-weight: bold; color: #EA580C; margin-bottom: 2px; border: none; background: transparent;")
         self.submit_btn.setText("💾 Save Modified Changes")
         self.submit_btn.setStyleSheet("""
-            QPushButton { background-color: #EA580C; color: white; padding: 14px; font-weight: bold; border-radius: 10px; border: none; font-size: 14px; margin-top: 5px; }
-            QPushButton:pressed { background-color: #C2410C; }
+            QPushButton { background-color: #EA580C; color: white; padding: 10px; font-weight: bold; border-radius: 8px; border: none; font-size: 12px; margin-top: 2px; }
         """)
         self.cancel_edit_btn.show()
+
+        # عند الضغط على تعديل مستخدم، نفتح الكيبورد تلقائياً للتسهيل
+        self.keyboard_widget.show()
         self.handle_input_focus(self.fullname_input, None)
 
     def reset_form_state(self):
@@ -360,25 +381,25 @@ class UserManagementPage(QWidget):
         self.password_input.clear()
         self.pincode_input.clear()
 
-        # إعادة كل الحقول للشكل العادي غير المضيء
         for input_box in [self.fullname_input, self.username_input, self.password_input, self.pincode_input]:
             input_box.setStyleSheet(
-                "padding: 10px; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 13px; background-color: #F8FAFC; color: #1E293B;")
+                "padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 11px; background-color: #F8FAFC; color: #1E293B;")
 
         self.role_combobox.setCurrentIndex(0)
 
-        # العودة لوضع الإضافة العادي
         self.form_title.setText("Register New System Account")
         self.form_title.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #4F46E5; margin-bottom: 2px; border: none; background: transparent;")
+            "font-size: 13px; font-weight: bold; color: #4F46E5; margin-bottom: 2px; border: none; background: transparent;")
         self.submit_btn.setText("➕ Confirm Access Registration")
         self.submit_btn.setStyleSheet("""
-            QPushButton { background-color: #4F46E5; color: white; padding: 14px; font-weight: bold; border-radius: 10px; border: none; font-size: 14px; margin-top: 5px; }
-            QPushButton:pressed { background-color: #4338CA; }
+            QPushButton { background-color: #4F46E5; color: white; padding: 10px; font-weight: bold; border-radius: 8px; border: none; font-size: 12px; margin-top: 2px; }
         """)
         self.cancel_edit_btn.hide()
 
-        # تفعيل الإضاءة على الحقل الأول بدئياً
+        # إخفاء الكيبورد عند إعادة ضبط الاستمارات
+        if hasattr(self, 'keyboard_widget'):
+            self.keyboard_widget.hide()
+
         self.handle_input_focus(self.fullname_input, None)
 
     def handle_save_user(self):
@@ -395,8 +416,7 @@ class UserManagementPage(QWidget):
         try:
             if self.editing_record_id:
                 confirm = QMessageBox.question(
-                    self, "Confirm Changes ❓",
-                    f"Are you sure you want to update fields for user '{username}'?",
+                    self, "Confirm Changes ❓", f"Are you sure you want to update fields for user '{username}'?",
                     QMessageBox.Yes | QMessageBox.No
                 )
                 if confirm != QMessageBox.Yes: return
