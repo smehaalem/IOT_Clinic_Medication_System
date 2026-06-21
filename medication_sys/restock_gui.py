@@ -14,8 +14,9 @@ class RestockScreen(QStackedWidget):
     Index 1: Data entry form (Smart Fill enabled).
     """
 
-    def __init__(self):
+    def __init__(self, on_back_to_menu=None):  # הוספנו את המשתנה כאן
         super().__init__()
+        self.on_back_to_menu = on_back_to_menu  # שומרים אותו לשימוש בכפתור
 
         # Screen 0: Initial Barcode Scan
         self.scan_page = QWidget()
@@ -37,9 +38,19 @@ class RestockScreen(QStackedWidget):
         self.barcode_input.setPlaceholderText("Scan barcode or enter manually...")
         btn = QPushButton("Search Medication")
         btn.clicked.connect(self.check_barcode)
-        layout.addWidget(QLabel("Scan Medication Barcode"))
+
         layout.addWidget(self.barcode_input)
         layout.addWidget(btn)
+
+        # --- הוספת כפתור החזרה ---
+        back_btn = QPushButton("⬅️ Return to Menu")
+        back_btn.setStyleSheet(
+            "background-color: transparent; color: #718096; border: none; font-weight: bold; text-decoration: underline; margin-top: 20px;")
+        if self.on_back_to_menu:
+            back_btn.clicked.connect(self.on_back_to_menu)
+        layout.addWidget(back_btn)
+        # ------------------------
+
         self.scan_page.setLayout(layout)
 
     def init_form_page(self):

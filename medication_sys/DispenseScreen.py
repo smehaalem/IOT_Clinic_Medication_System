@@ -9,9 +9,10 @@ import medication_service
 class ScanScreen(QWidget):
     """Screen 1: Waiting for barcode scan or manual entry."""
 
-    def __init__(self, on_barcode_scanned):
+    def __init__(self, on_barcode_scanned, on_back_to_menu=None): # הוספנו כאן
         super().__init__()
         self.on_barcode_scanned = on_barcode_scanned
+        self.on_back_to_menu = on_back_to_menu
         self.init_ui()
 
     def init_ui(self):
@@ -21,7 +22,6 @@ class ScanScreen(QWidget):
         self.label.setStyleSheet("font-size: 20px; font-weight: bold;")
         layout.addWidget(self.label)
 
-        # Manual input field as a fallback option
         self.input = QLineEdit()
         self.input.setPlaceholderText("Enter barcode manually...")
         layout.addWidget(self.input)
@@ -29,6 +29,14 @@ class ScanScreen(QWidget):
         btn = QPushButton("Search Medication")
         btn.clicked.connect(lambda: self.on_barcode_scanned(self.input.text().strip()))
         layout.addWidget(btn)
+
+        # --- הוספת כפתור החזרה ---
+        back_btn = QPushButton("⬅️ Return to Menu")
+        back_btn.setStyleSheet("background-color: transparent; color: #718096; border: none; font-weight: bold; text-decoration: underline; margin-top: 20px;")
+        if self.on_back_to_menu:
+            back_btn.clicked.connect(self.on_back_to_menu)
+        layout.addWidget(back_btn)
+        # ------------------------
 
         self.setLayout(layout)
 
@@ -122,10 +130,13 @@ class DispenseSystem(QStackedWidget):
     Main Router that switches between ScanScreen and BatchSelectionScreen.
     """
 
-    def __init__(self):
+    def __init__(self, on_back_to_menu=None): # הוספנו כאן
         super().__init__()
-        # Initializing screens
-        self.scan_screen = ScanScreen(on_barcode_scanned=self.go_to_batch)
+        # מעבירים את הפקודה למסך הסריקה
+        self.scan_screen = ScanScreen(
+            on_barcode_scanned=self.go_to_batch,
+            on_back_to_menu=on_back_to_menu
+        )
         self.batch_screen = BatchSelectionScreen(
             doctor_name="Dr. Levi",
             on_finish=lambda: print("Finish clicked - Close app or go home"),
@@ -141,7 +152,7 @@ class DispenseSystem(QStackedWidget):
             self.batch_screen.load_data(barcode)
             self.setCurrentIndex(1)
         else:
-            QMessageBox.warning(self, "Error", "Please provide a valid barcode.")
+            QMessageBox.warning(self, "Error", "Please enter a barcode")
 
 
 if __name__ == "__main__":
