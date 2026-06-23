@@ -6,81 +6,78 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QComboBox,
-    QFrame, QMessageBox, QHeaderView, QStackedWidget, QListWidget, QListWidgetItem, QDialog
+    QFrame, QMessageBox, QHeaderView, QStackedWidget, QListWidget, QListWidgetItem
 )
-from PyQt5.QtCore import Qt, QEvent
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QCursor
 import airtable_api
 
 
-class StaffFormDialog(QDialog):
-    """ نافذة منبثقة مطورة وموسعة للتاتش باد الاحترافي لمنع ضغط الأزرار """
+class StaffFormPage(QWidget):
+    """ واجهة إدخال وتعديل بيانات الموظفين ممتدة بالكامل (Full Screen) ومصممة خصيصاً لشاشات الرازبري العريضة """
 
-    def __init__(self, parent=None, user_data=None):
+    def __init__(self, parent=None, on_close_callback=None):
         super().__init__(parent)
-        self.user_data = user_data
+        self.on_close_callback = on_close_callback
+        self.user_data = None
         self.current_focused_input = None
-        self.saved_successfully = False
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowTitle("Staff Account Setup")
-        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
+        # اللياوت الرئيسي ممتد بالكامل بالعرض
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(15)
 
-        # 🔥 تم تكبير حجم النافذة الإجمالي (العرض والارتفاع) لمنع حشر الكيبورد
-        self.setFixedSize(460, 520)
-
-        main_card = QFrame(self)
-        main_card.setGeometry(0, 0, 460, 520)
-        main_card.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
-                border: 2px solid #6366F1;
-                border-radius: 16px;
-            }
-            QLabel { font-size: 11px; font-weight: 600; color: #475569; border: none; background: transparent; }
-            QLineEdit { padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 11px; background-color: #F8FAFC; color: #1E293B; }
-            QComboBox { padding: 6px; border: 1px solid #E2E8F0; border-radius: 6px; background-color: #FFFFFF; font-size: 11px; }
+        # =====================================================================
+        # 📋 القسم الأيسر: استمارة البيانات والأزرار (50% من الشاشة)
+        # =====================================================================
+        form_card = QFrame()
+        form_card.setStyleSheet("""
+            QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; }
+            QLabel { font-size: 11px; font-weight: 600; color: #475569; border: none; }
+            QLineEdit { padding: 7px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 12px; background-color: #F8FAFC; color: #1E293B; }
+            QComboBox { padding: 7px; border: 1px solid #E2E8F0; border-radius: 6px; background-color: #FFFFFF; font-size: 12px; }
         """)
 
-        self.card_layout = QVBoxLayout(main_card)
-        self.card_layout.setContentsMargins(15, 15, 15, 15)
-        self.card_layout.setSpacing(5)
+        form_layout = QVBoxLayout(form_card)
+        form_layout.setContentsMargins(15, 15, 15, 15)
+        form_layout.setSpacing(6)
 
-        self.form_title = QLabel("➕ Register New Staff")
-        self.form_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #6366F1; margin-bottom: 2px;")
-        self.card_layout.addWidget(self.form_title)
+        self.form_title = QLabel("➕ Register New Staff Member")
+        self.form_title.setStyleSheet(
+            "font-size: 15px; font-weight: bold; color: #6366F1; margin-bottom: 4px; border: none;")
+        form_layout.addWidget(self.form_title)
 
-        # حقول الإدخال
-        self.card_layout.addWidget(QLabel("Full Name"))
+        form_layout.addWidget(QLabel("Full Name"))
         self.fullname_input = QLineEdit()
         self.fullname_input.focusInEvent = lambda event: self.handle_input_focus(self.fullname_input, event)
-        self.card_layout.addWidget(self.fullname_input)
+        form_layout.addWidget(self.fullname_input)
 
-        self.card_layout.addWidget(QLabel("Username"))
+        form_layout.addWidget(QLabel("Username"))
         self.username_input = QLineEdit()
         self.username_input.focusInEvent = lambda event: self.handle_input_focus(self.username_input, event)
-        self.card_layout.addWidget(self.username_input)
+        form_layout.addWidget(self.username_input)
 
-        self.card_layout.addWidget(QLabel("Password / Key"))
+        form_layout.addWidget(QLabel("Password / Key"))
         self.password_input = QLineEdit()
         self.password_input.focusInEvent = lambda event: self.handle_input_focus(self.password_input, event)
-        self.card_layout.addWidget(self.password_input)
+        form_layout.addWidget(self.password_input)
 
-        self.card_layout.addWidget(QLabel("System PIN"))
+        form_layout.addWidget(QLabel("System PIN"))
         self.pincode_input = QLineEdit()
         self.pincode_input.focusInEvent = lambda event: self.handle_input_focus(self.pincode_input, event)
-        self.card_layout.addWidget(self.pincode_input)
+        form_layout.addWidget(self.pincode_input)
 
-        self.card_layout.addWidget(QLabel("Privilege Level"))
+        form_layout.addWidget(QLabel("Privilege Level"))
         self.role_combobox = QComboBox()
         self.role_combobox.addItems(["Maneger", "Doctor", "Nurse", "Assistant"])
         self.role_combobox.currentIndexChanged.connect(self.toggle_email_field_visibility)
-        self.card_layout.addWidget(self.role_combobox)
+        form_layout.addWidget(self.role_combobox)
 
-        # حاوية الإيميل الديناميكية للمدير
+        # حاوية البريد الإلكتروني للمدير
         self.email_container = QWidget()
+        self.email_container.setStyleSheet("border: none; background: transparent;")
         email_lay = QVBoxLayout(self.email_container)
         email_lay.setContentsMargins(0, 0, 0, 0)
         email_lay.setSpacing(4)
@@ -89,84 +86,105 @@ class StaffFormDialog(QDialog):
         self.email_input.setPlaceholderText("manager@clinic.com")
         self.email_input.focusInEvent = lambda event: self.handle_input_focus(self.email_input, event)
         email_lay.addWidget(self.email_input)
-        self.card_layout.addWidget(self.email_container)
+        form_layout.addWidget(self.email_container)
 
-        # أزرار الحفظ والإلغاء الأساسية
+        form_layout.addStretch()
+
+        # أزرار التحكم السفلى (تراجع وحفظ)
         btn_layout = QHBoxLayout()
-        self.cancel_btn = QPushButton(" Cancel")
-        self.cancel_btn.setStyleSheet(
-            "background-color: #EF4444; color: white; padding: 8px; font-weight: bold; border-radius: 6px; font-size: 11px; border: none;")
-        self.cancel_btn.clicked.connect(self.reject)
+        self.back_btn = QPushButton("⬅️ Back")
+        self.back_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.back_btn.setStyleSheet(
+            "background-color: #64748B; color: white; padding: 10px; font-weight: bold; border-radius: 6px; font-size: 12px; border: none;")
+        self.back_btn.clicked.connect(self.handle_back_click)
 
-        self.submit_btn = QPushButton("💾 Save")
+        self.submit_btn = QPushButton("💾 Save Account")
+        self.submit_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.submit_btn.setStyleSheet(
-            "background-color: #10B981; color: white; padding: 8px; font-weight: bold; border-radius: 6px; font-size: 11px; border: none;")
+            "background-color: #10B981; color: white; padding: 10px; font-weight: bold; border-radius: 6px; font-size: 12px; border: none;")
         self.submit_btn.clicked.connect(self.handle_save)
 
-        btn_layout.addWidget(self.cancel_btn, stretch=1)
+        btn_layout.addWidget(self.back_btn, stretch=1)
         btn_layout.addWidget(self.submit_btn, stretch=2)
-        self.card_layout.addLayout(btn_layout)
+        form_layout.addLayout(btn_layout)
+
+        main_layout.addWidget(form_card, stretch=4)
 
         # =====================================================================
-        # ⌨️ PREMIUM OPTIMIZED TOUCHPAD WORKSPACE (تصميم الكيبورد الاحترافي الجديد)
+        # ⌨️ القسم الأيمن: التاتش باد الموسع بالكامل العريض (50% من الشاشة)
         # =====================================================================
-        self.card_layout.addWidget(QLabel("Touch Pad Entry:"))
-        keyboard_widget = QWidget()
-        kb_layout = QVBoxLayout(keyboard_widget)
-        kb_layout.setContentsMargins(0, 0, 0, 0)
-        kb_layout.setSpacing(3)
+        kb_card = QFrame()
+        kb_card.setStyleSheet("""
+            QFrame { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; }
+            QPushButton { 
+                background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 13px; 
+                border: 1px solid #CBD5E1; border-radius: 6px; 
+            }
+            QPushButton:pressed { background-color: #E2E8F0; }
+        """)
+        kb_layout = QVBoxLayout(kb_card)
+        kb_layout.setContentsMargins(10, 10, 10, 10)
+        kb_layout.setSpacing(5)
 
-        # توزيع أزرار عريض ومريح للعين واليد يماثل لوحات المفاتيح الحقيقية
+        title_kb = QLabel("⌨️ Touch Workspace Keyboard")
+        title_kb.setStyleSheet("font-size: 11px; color: #64748B; font-weight: bold; border: none; margin-bottom: 2px;")
+        kb_layout.addWidget(title_kb)
+
         rows = [
             ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
             ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
             ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', '-'],
             ['z', 'x', 'c', 'v', 'b', 'n', 'm', '@', '.', '⌫'],
-            ['Space', 'Clear']  # صف سفلي مخصص ومريح للأوامر الكبرى
+            ['Space', 'Clear']
         ]
 
         for row in rows:
             row_layout = QHBoxLayout()
-            row_layout.setSpacing(3)
+            row_layout.setSpacing(4)
             for key in row:
                 btn = QPushButton(key)
                 btn.setFocusPolicy(Qt.NoFocus)
-                btn.setCursor(QCursor(Qt.PointingHandCursor))
 
-                # ستايل الأزرار الكبرى والأحرف لضمان حجم لمسي عريض وممتاز (padding عمودي مريح)
+                # 🔥 الإصلاح المستقر: إعطاء مساحة تمدد مرنة عمودياً دون التسبب بأي AttributeError
+                btn.setMinimumHeight(45)
+
                 if key in ['⌫', 'Clear']:
-                    btn.setStyleSheet("""
-                        QPushButton { background-color: #CBD5E1; color: #1E293B; font-weight: bold; padding: 8px 0px; border-radius: 6px; border: none; font-size: 11px; min-width: 40px; }
-                        QPushButton:pressed { background-color: #94A3B8; }
-                    """)
+                    btn.setStyleSheet("background-color: #CBD5E1; color: #1E293B; border: none; min-width: 55px; padding: 8px 0px;")
                 elif key == 'Space':
-                    btn.setStyleSheet("""
-                        QPushButton { background-color: #F1F5F9; color: #1E293B; font-weight: bold; padding: 8px 0px; border-radius: 6px; border: 1px solid #CBD5E1; font-size: 11px; min-width: 160px; }
-                        QPushButton:pressed { background-color: #E2E8F0; }
-                    """)
+                    btn.setStyleSheet("background-color: #FFFFFF; min-width: 180px; padding: 8px 0px;")
                 else:
-                    btn.setStyleSheet("""
-                        QPushButton { background-color: #F1F5F9; color: #1E293B; font-weight: 600; padding: 8px 0px; border-radius: 6px; border: 1px solid #E2E8F0; font-size: 11px; min-width: 32px; }
-                        QPushButton:pressed { background-color: #E2E8F0; }
-                    """)
+                    btn.setStyleSheet("background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 13px; border: 1px solid #CBD5E1; border-radius: 6px; padding: 8px 0px;")
 
                 btn.clicked.connect(lambda checked, k=key: self.handle_key_press(k))
                 row_layout.addWidget(btn)
             kb_layout.addLayout(row_layout)
 
-        self.card_layout.addWidget(keyboard_widget)
-        self.email_input.installEventFilter(self)
+        main_layout.addWidget(kb_card, stretch=5)
 
-        if self.user_data:
-            self.form_title.setText("📝 Edit Staff Member")
-            self.fullname_input.setText(str(self.user_data.get("Full Name", "")))
-            self.username_input.setText(str(self.user_data.get("Username", "")))
-            self.password_input.setText(str(self.user_data.get("Password", "")))
-            pin_raw = str(self.user_data.get("PIN Code", ""))
+        self.toggle_email_field_visibility()
+        self.handle_input_focus(self.fullname_input, None)
+
+    def set_user_data(self, user_data=None):
+        """ تفريغ أو شحن البيانات للتمييز بين الإضافة والتعديل """
+        self.user_data = user_data
+        if user_data:
+            self.form_title.setText("📝 Edit Staff Member Account")
+            self.fullname_input.setText(str(user_data.get("Full Name", "")))
+            self.username_input.setText(str(user_data.get("Username", "")))
+            self.password_input.setText(str(user_data.get("Password", "")))
+            pin_raw = str(user_data.get("PIN Code", ""))
             self.pincode_input.setText(pin_raw.split(".")[0] if "." in pin_raw else pin_raw)
-            self.email_input.setText(str(self.user_data.get("Email", "")))
-            idx = self.role_combobox.findText(str(self.user_data.get("Role", "Assistant")))
+            self.email_input.setText(str(user_data.get("Email", "")))
+            idx = self.role_combobox.findText(str(user_data.get("Role", "Assistant")))
             if idx >= 0: self.role_combobox.setCurrentIndex(idx)
+        else:
+            self.form_title.setText("➕ Register New Staff Member")
+            self.fullname_input.clear()
+            self.username_input.clear()
+            self.password_input.clear()
+            self.pincode_input.clear()
+            self.email_input.clear()
+            self.role_combobox.setCurrentIndex(0)
 
         self.toggle_email_field_visibility()
         self.handle_input_focus(self.fullname_input, None)
@@ -182,11 +200,11 @@ class StaffFormDialog(QDialog):
         for box in [self.fullname_input, self.username_input, self.password_input, self.pincode_input,
                     self.email_input]:
             box.setStyleSheet(
-                "padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 11px; background-color: #F8FAFC; color: #1E293B;")
+                "padding: 7px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 12px; background-color: #F8FAFC; color: #1E293B;")
         self.current_focused_input = input_field
         if event: super(QLineEdit, input_field).focusInEvent(event)
         input_field.setStyleSheet(
-            "padding: 6px; border: 2px solid #6366F1; border-radius: 6px; font-size: 11px; background-color: #F5F3FF; color: #0F172A;")
+            "padding: 7px; border: 2px solid #6366F1; border-radius: 6px; font-size: 12px; background-color: #F5F3FF; color: #0F172A;")
 
     def handle_key_press(self, key):
         if not self.current_focused_input: return
@@ -199,6 +217,9 @@ class StaffFormDialog(QDialog):
             self.current_focused_input.setText(txt + ' ')
         else:
             self.current_focused_input.setText(txt + key)
+
+    def handle_back_click(self):
+        if self.on_close_callback: self.on_close_callback(False)
 
     def handle_save(self):
         fn = self.fullname_input.text().strip()
@@ -213,13 +234,12 @@ class StaffFormDialog(QDialog):
             return
 
         if role == "Maneger" and not email:
-            QMessageBox.critical(self, "Email Required 📧",
-                                 "Security Alert: System Managers MUST provide a valid email address!")
+            QMessageBox.critical(self, "Email Required 📧", "Security Alert: Managers MUST provide an email for alerts!")
             return
 
         try:
             if self.user_data:
-                rec = airtable_api.update_user_records(self.user_data.get("record_id"), un, ps, role, pin, fn)
+                airtable_api.update_user_records(self.user_data.get("record_id"), un, ps, role, pin, fn)
                 airtable_api.users_table.update(self.user_data.get("record_id"),
                                                 {"Email": email if role == "Maneger" else ""})
             else:
@@ -227,17 +247,15 @@ class StaffFormDialog(QDialog):
                     "Username": str(un), "Password": str(ps), "Role": str(role), "PIN Code": str(pin),
                     "Full Name": str(fn), "Email": str(email) if role == "Maneger" else ""
                 }
-                rec = airtable_api.users_table.create(user_payload, typecast=True)
+                airtable_api.users_table.create(user_payload, typecast=True)
 
-            if rec:
-                self.saved_successfully = True
-                self.accept()
+            if self.on_close_callback: self.on_close_callback(True)
         except Exception as e:
             QMessageBox.critical(self, "Database Error", str(e))
 
 
 class UserManagementPage(QWidget):
-    """ واجهة الإدارة فائقة التطور: ممتدة بالكامل على الشاشة وبدعم الحقول المنبثقة الذكية """
+    """ الواجهة الرئيسية المحدثة المكونة من قطاع الـ Stack للتنقل الكامل بين الجداول والاستمارة """
 
     def __init__(self, parent=None, on_back_to_menu=None):
         super().__init__(parent)
@@ -245,18 +263,26 @@ class UserManagementPage(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.setSpacing(6)
+        self.outer_stack = QStackedWidget(self)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.outer_stack)
+
+        # ----------------------------------------------------
+        # الصفحة 0: جدول الحسابات الرئيسي (العرض الكامل)
+        # ----------------------------------------------------
+        self.main_view_widget = QWidget()
+        view_layout = QVBoxLayout(self.main_view_widget)
+        view_layout.setContentsMargins(5, 5, 5, 5)
+        view_layout.setSpacing(6)
 
         container = QFrame()
         container.setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;")
-        left_layout = QVBoxLayout(container)
-        left_layout.setContentsMargins(10, 10, 10, 10)
-        left_layout.setSpacing(8)
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(10, 10, 10, 10)
+        container_layout.setSpacing(8)
 
         navigation_tabs = QHBoxLayout()
-
         self.tab_users_btn = QPushButton("👥 Staff Accounts")
         self.tab_users_btn.setCheckable(True)
         self.tab_users_btn.setChecked(True)
@@ -271,7 +297,7 @@ class UserManagementPage(QWidget):
         self.add_staff_fab = QPushButton("➕ Add New Staff")
         self.add_staff_fab.setStyleSheet(
             "background-color: #10B981; color: white; font-weight: bold; padding: 6px 14px; border-radius: 6px; font-size: 11px; border: none;")
-        self.add_staff_fab.clicked.connect(lambda: self.open_staff_form_popup(None))
+        self.add_staff_fab.clicked.connect(self.navigate_to_add_form)
 
         back_btn = QPushButton("⬅️ Menu")
         back_btn.setStyleSheet(
@@ -283,13 +309,12 @@ class UserManagementPage(QWidget):
         navigation_tabs.addWidget(self.add_staff_fab)
         navigation_tabs.addStretch()
         navigation_tabs.addWidget(back_btn)
-        left_layout.addLayout(navigation_tabs)
+        container_layout.addLayout(navigation_tabs)
 
         self.admin_sub_stack = QStackedWidget()
 
-        # TAB 0: جدول الحسابات
         self.page_users_widget = QTableWidget()
-        self.page_users_widget.setColumnCount(4)  # رفع الأعمدة إلى 4 لعرض البريد الإلكتروني لايف في الجدول
+        self.page_users_widget.setColumnCount(4)
         self.page_users_widget.setHorizontalHeaderLabels(["Username", "Role", "Email Contact", "Actions"])
         self.page_users_widget.setSelectionBehavior(QTableWidget.SelectRows)
         self.page_users_widget.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -304,27 +329,41 @@ class UserManagementPage(QWidget):
         self.page_users_widget.verticalHeader().setDefaultSectionSize(30)
         self.admin_sub_stack.addWidget(self.page_users_widget)
 
-        # TAB 1: قائمة الأدوية للإتلاف
         self.page_meds_list = QListWidget()
         self.page_meds_list.setStyleSheet(
             "border: 1px solid #E2E8F0; border-radius: 6px; background: #F8FAFC; font-size: 11px;")
         self.admin_sub_stack.addWidget(self.page_meds_list)
 
-        left_layout.addWidget(self.admin_sub_stack)
+        container_layout.addWidget(self.admin_sub_stack)
 
         self.refresh_hub_btn = QPushButton("🔄 Sync Cloud Directory")
         self.refresh_hub_btn.setStyleSheet(
             "padding: 8px; font-size: 11px; font-weight: bold; background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; color: #475569;")
         self.refresh_hub_btn.clicked.connect(self.sync_current_hub_view)
-        left_layout.addWidget(self.refresh_hub_btn)
+        container_layout.addWidget(self.refresh_hub_btn)
+        view_layout.addWidget(container)
 
-        main_layout.addWidget(container)
+        self.outer_stack.addWidget(self.main_view_widget)
+
+        # ----------------------------------------------------
+        # الصفحة 1: صفحة الاستمارة الكاملة (Full Screen Form)
+        # ----------------------------------------------------
+        self.form_page_widget = StaffFormPage(self, on_close_callback=self.handle_form_callback)
+        self.outer_stack.addWidget(self.form_page_widget)
+
         self.switch_admin_tab(0)
 
-    def open_staff_form_popup(self, user_data=None):
-        dialog = StaffFormDialog(self, user_data)
-        dialog.move(self.window().geometry().center() - dialog.rect().center())
-        if dialog.exec_() == QDialog.Accepted and dialog.saved_successfully:
+    def navigate_to_add_form(self):
+        self.form_page_widget.set_user_data(None)
+        self.outer_stack.setCurrentIndex(1)
+
+    def navigate_to_edit_form(self, user_data):
+        self.form_page_widget.set_user_data(user_data)
+        self.outer_stack.setCurrentIndex(1)
+
+    def handle_form_callback(self, is_saved):
+        self.outer_stack.setCurrentIndex(0)
+        if is_saved:
             QMessageBox.information(self, "Success ✅", "Database synchronized successfully.")
             self.load_users_data()
 
@@ -359,8 +398,6 @@ class UserManagementPage(QWidget):
                 self.page_users_widget.insertRow(row_idx)
                 role_val = user_data.get("Role", "N/A")
                 if isinstance(role_val, list): role_val = role_val[0] if role_val else "N/A"
-
-                # جلب قيمة الإيميل المخزنة لايف أو وضع علامة '-' لباقي الستاف
                 email_val = user_data.get("Email", "-") if role_val == "Maneger" else "-"
 
                 u_item = QTableWidgetItem(str(user_data.get("Username", "N/A")))
@@ -373,7 +410,7 @@ class UserManagementPage(QWidget):
 
                 self.page_users_widget.setItem(row_idx, 0, u_item)
                 self.page_users_widget.setItem(row_idx, 1, r_item)
-                self.page_users_widget.setItem(row_idx, 2, e_item)  # تعبئة عمود الإيميل الجديد
+                self.page_users_widget.setItem(row_idx, 2, e_item)
 
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
@@ -384,7 +421,7 @@ class UserManagementPage(QWidget):
                 edit_btn.setFixedSize(26, 26)
                 edit_btn.setStyleSheet(
                     "background-color: #0EA5E9; color: white; border-radius: 6px; border: none; font-size: 11px;")
-                edit_btn.clicked.connect(lambda checked, u=user_data: self.open_staff_form_popup(u))
+                edit_btn.clicked.connect(lambda checked, u=user_data: self.navigate_to_edit_form(u))
 
                 del_btn = QPushButton("🗑️")
                 del_btn.setFixedSize(26, 26)

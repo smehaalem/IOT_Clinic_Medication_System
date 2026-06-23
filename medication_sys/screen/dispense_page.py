@@ -6,7 +6,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFrame, QMessageBox, QStackedWidget, QListWidget, QListWidgetItem, QComboBox
+    QPushButton, QFrame, QMessageBox, QStackedWidget, QTableWidget,
+    QTableWidgetItem, QComboBox, QHeaderView, QCheckBox
 )
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QCursor
@@ -15,8 +16,9 @@ import airtable_api
 
 class DispenseMedicationPage(QWidget):
     """
-    Smart Medication Dispensing Screen.
-    ⚠️ UPDATED: Fully supports Airtable Barcode Lookup fields (Handles Linked Lists).
+    Advanced Medication Dispensing Core Workspace.
+    Supports dynamic Hybrid FIFO calculations, explicit batch selection, tabular UX layouts,
+    and fully targets the 'Barcode lookup' fields.
     """
 
     def __init__(self, parent=None, on_back_to_menu=None):
@@ -46,6 +48,7 @@ class DispenseMedicationPage(QWidget):
         self.preload_inventory_cache()
 
     def preload_inventory_cache(self):
+        """ Pulls inventory and unpacks the Barcode lookup field list structure """
         self.all_cached_inventory = []
         try:
             if not hasattr(airtable_api, 'stock_table') or airtable_api.stock_table is None:
@@ -55,9 +58,9 @@ class DispenseMedicationPage(QWidget):
 
             for r in records:
                 fields = r.fields if hasattr(r, 'fields') else r.get('fields', {})
-                qty = int(fields.get("Current Pills Count", 0))
+                qty = airtable_api.safe_extract(fields.get("Current Pills Count"), int)
                 if qty > 0:
-                    # 🔥 استخراج الباركود الذكي من حقل الـ Lookup أو الحقل العادي
+                    # 🔥 Targeted: Extracting dynamically from Barcode lookup field
                     raw_b = fields.get("Barcode lookup") or fields.get("Barcode", "")
                     if isinstance(raw_b, list):
                         clean_b = str(raw_b[0]).strip() if raw_b else ""
@@ -66,19 +69,19 @@ class DispenseMedicationPage(QWidget):
 
                     self.all_cached_inventory.append({
                         "id": r.id if hasattr(r, 'id') else r.get('id'),
-                        "name": fields.get("Medicine Name", ""),
-                        "barcode": clean_b,  # حفظ الباركود الصافي كنص وليس كـ List
-                        "ingredient": fields.get("Active Ingredient", ""),
-                        "dosage": fields.get("Dosage", ""),
+                        "name": airtable_api.safe_extract(fields.get("Medicine Name"), str),
+                        "barcode": clean_b,
+                        "ingredient": airtable_api.safe_extract(fields.get("Active Ingredient"), str),
+                        "dosage": airtable_api.safe_extract(fields.get("Dosage"), str),
                         "qty": qty,
-                        "batch": fields.get("A Batch", "N/A"),
-                        "expiry": fields.get("Expiry Date", "")
+                        "batch": airtable_api.safe_extract(fields.get("A Batch"), str),
+                        "expiry": airtable_api.safe_extract(fields.get("Expiry Date"), str)
                     })
         except Exception as e:
-            print(f"⚠️ Stock cache bypassed or empty: {e}")
+            print(f"⚠️ Stock cache bypass log: {e}")
 
     # =====================================================================
-    # 🎴 SCREEN 0: Live Search & Scanner Entry
+    # 🎴 SCREEN 0: Live Search & Scanner Entry Layout
     # =====================================================================
     def init_scan_screen(self):
         page = QWidget()
@@ -95,7 +98,7 @@ class DispenseMedicationPage(QWidget):
         left_layout.setSpacing(8)
 
         header_layout = QHBoxLayout()
-        title = QLabel("📦 Dispense Medicine")
+        title = QLabel("📦 Dispense Medication Workspace")
         title.setStyleSheet("font-size: 16px; font-weight: bold; color: #4F46E5; border: none;")
 
         back_btn = QPushButton("⬅️ Menu")
@@ -115,7 +118,7 @@ class DispenseMedicationPage(QWidget):
         left_layout.addLayout(header_layout)
 
         search_type_layout = QHBoxLayout()
-        lbl = QLabel("Filter By:")
+        lbl = QLabel("Filter Criteria:")
         lbl.setStyleSheet("font-size: 12px; font-weight: 600; color: #475569;")
         search_type_layout.addWidget(lbl)
 
@@ -130,7 +133,7 @@ class DispenseMedicationPage(QWidget):
         left_layout.addLayout(search_type_layout)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Scan barcode or type to search...")
+        self.search_input.setPlaceholderText("Scan barcode identity or type to live query search...")
         self.search_input.setStyleSheet("padding: 8px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 12px;")
         self.search_input.textChanged.connect(self.run_live_filter)
         self.search_input.returnPressed.connect(self.handle_scanner_return_pressed)
@@ -139,18 +142,22 @@ class DispenseMedicationPage(QWidget):
         self.search_input.installEventFilter(self)
         left_layout.addWidget(self.search_input)
 
-        self.live_matches_list = QListWidget()
+        self.live_matches_list = QTableWidget()
+        self.live_matches_list.setColumnCount(3)
+        self.live_matches_list.setHorizontalHeaderLabels(["Medication Name", "Strength", "Barcode"])
+        self.live_matches_list.setSelectionBehavior(QTableWidget.SelectRows)
+        self.live_matches_list.setEditTriggers(QTableWidget.NoEditTriggers)
         self.live_matches_list.setStyleSheet("""
-            QListWidget { border: 1px solid #E2E8F0; border-radius: 6px; background: #F8FAFC; font-size: 12px; padding: 4px; }
-            QListWidget::item { padding: 6px; border-bottom: 1px solid #F1F5F9; border-radius: 4px; }
-            QListWidget::item:selected { background-color: #EEF2FF; color: #4F46E5; font-weight: bold; }
+            QTableWidget { border: 1px solid #E2E8F0; border-radius: 8px; background: #F8FAFC; font-size: 12px; }
+            QHeaderView::section { background-color: #F1F5F9; font-weight: bold; color: #475569; border: none; padding: 6px; }
         """)
-        self.live_matches_list.itemClicked.connect(self.handle_live_item_selection)
+        self.live_matches_list.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.live_matches_list.itemClicked.connect(self.handle_table_row_selection)
         left_layout.addWidget(self.live_matches_list)
 
         main_layout.addWidget(left_card, stretch=5)
 
-        # ⌨️ لوحة المفاتيح اللمسية الموسعة
+        # ⌨️ Embedded Touch Input Pad
         self.kb_card = QFrame()
         self.kb_card.setStyleSheet("background-color: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0;")
         kb_layout = QVBoxLayout(self.kb_card)
@@ -195,7 +202,7 @@ class DispenseMedicationPage(QWidget):
         self.internal_stack.addWidget(page)
 
     # =====================================================================
-    # 🎴 SCREEN 1: Quantity Selection & Batch Info
+    # 🎴 SCREEN 1: Grid Table Selection Board
     # =====================================================================
     def init_selection_screen(self):
         page = QWidget()
@@ -211,33 +218,37 @@ class DispenseMedicationPage(QWidget):
         form_layout.setContentsMargins(15, 15, 15, 15)
         form_layout.setSpacing(8)
 
-        self.med_name_title = QLabel("Medicine: Loading...")
+        self.med_name_title = QLabel("Medicine Name: Loading...")
         self.med_name_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #4F46E5;")
         form_layout.addWidget(self.med_name_title)
 
-        self.total_stock_lbl = QLabel("Total Available: --")
+        self.total_stock_lbl = QLabel("Total Inventory Count: --")
         self.total_stock_lbl.setStyleSheet("font-size: 12px; font-weight: bold; color: #2563EB;")
         form_layout.addWidget(self.total_stock_lbl)
 
-        self.stock_list_widget = QListWidget()
-        self.stock_list_widget.setStyleSheet("""
-            QListWidget { border: 1px solid #E2E8F0; border-radius: 6px; background: #F8FAFC; font-size: 12px; padding: 4px; }
-            QListWidget::item { padding: 6px; border-bottom: 1px solid #F1F5F9; color: #334155; }
+        self.batch_table = QTableWidget()
+        self.batch_table.setColumnCount(5)
+        self.batch_table.setHorizontalHeaderLabels(["Select", "Batch ID", "Expiry Date", "Stock Qty", "Status"])
+        self.batch_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.batch_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.batch_table.setStyleSheet("""
+            QTableWidget { border: 1px solid #E2E8F0; border-radius: 8px; font-size: 11px; background-color: #FFFFFF; }
+            QHeaderView::section { background-color: #F8FAFC; font-weight: bold; padding: 5px; color: #475569; }
         """)
-        form_layout.addWidget(self.stock_list_widget)
+        self.batch_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        form_layout.addWidget(self.batch_table)
 
         form_layout.addWidget(
-            QLabel("Deduction Quantity", styleSheet="font-size: 11px; font-weight: bold; color: #475569;"))
+            QLabel("Required Pills / Dosage Count:", styleSheet="font-size: 11px; font-weight: bold; color: #475569;"))
         self.quantity_input = QLineEdit()
-        self.quantity_input.setPlaceholderText("Enter dosage/pills quantity count...")
+        self.quantity_input.setPlaceholderText("Type pill count to dispense...")
         self.quantity_input.setStyleSheet(
             "padding: 8px; font-size: 12px; border: 1px solid #CBD5E1; border-radius: 6px;")
-
         self.quantity_input.focusInEvent = lambda event: self.handle_input_focus(self.quantity_input, event)
         self.quantity_input.installEventFilter(self)
         form_layout.addWidget(self.quantity_input)
 
-        self.dispense_btn = QPushButton("⚡ Confirm & Dispense Now")
+        self.dispense_btn = QPushButton("⚡ Confirm & Run Hybrid FIFO Allocation")
         self.dispense_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.dispense_btn.setStyleSheet("""
             QPushButton { background-color: #10B981; color: white; padding: 10px; font-weight: bold; border-radius: 6px; border: none; font-size: 13px; }
@@ -247,18 +258,16 @@ class DispenseMedicationPage(QWidget):
         form_layout.addWidget(self.dispense_btn)
 
         nav_layout = QHBoxLayout()
-        another_btn = QPushButton("🔄 Scan Another")
+        another_btn = QPushButton("🔄 Scan New Identity")
         another_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        another_btn.setStyleSheet("""
-            QPushButton { background-color: #F1F5F9; color: #475569; padding: 8px; font-size: 12px; font-weight: bold; border-radius: 6px; border: 1px solid #E2E8F0; }
-        """)
+        another_btn.setStyleSheet(
+            "background-color: #F1F5F9; color: #475569; padding: 8px; font-size: 12px; font-weight: bold; border-radius: 6px; border: 1px solid #E2E8F0;")
         another_btn.clicked.connect(lambda: self.internal_stack.setCurrentIndex(0))
 
-        finish_btn = QPushButton("🏁 Finish")
+        finish_btn = QPushButton("🏁 Complete")
         finish_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        finish_btn.setStyleSheet("""
-            QPushButton { background-color: #4F46E5; color: white; padding: 8px; font-size: 12px; font-weight: bold; border-radius: 6px; border: none; }
-        """)
+        finish_btn.setStyleSheet(
+            "background-color: #4F46E5; color: white; padding: 8px; font-size: 12px; font-weight: bold; border-radius: 6px; border: none;")
         finish_btn.clicked.connect(self.clear_page)
         finish_btn.clicked.connect(self.on_back_to_menu)
 
@@ -268,7 +277,7 @@ class DispenseMedicationPage(QWidget):
 
         main_layout.addWidget(form_card, stretch=5)
 
-        # 🧮 لوحة الأرقام
+        # 🧮 Numerical Pad Frame Container
         self.kb_card_s2 = QFrame()
         self.kb_card_s2.setStyleSheet("background-color: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0;")
         kb_lay2 = QVBoxLayout(self.kb_card_s2)
@@ -306,7 +315,7 @@ class DispenseMedicationPage(QWidget):
         self.internal_stack.addWidget(page)
 
     # =====================================================================
-    # ⚙️ INTERACTIVE UX & LOOKUP PARSING LOGIC
+    # ⚙️ INTERACTIVE INTERFACE LOGIC & DATA PARSING
     # =====================================================================
     def handle_input_focus(self, input_field, event):
         for box in [self.search_input, self.quantity_input]:
@@ -343,10 +352,10 @@ class DispenseMedicationPage(QWidget):
         self.current_focused_input.setFocus(Qt.OtherFocusReason)
 
     def run_live_filter(self):
-        """ فلترة المخزون حياً بناءً على فك اللستة لحقل الباركود الجديد """
+        """ Fully optimized filter matching text against sanitized real barcodes using lookup structures """
         search_text = self.search_input.text().strip().lower()
         search_type = self.search_type_combo.currentText()
-        self.live_matches_list.clear()
+        self.live_matches_list.setRowCount(0)
 
         if not search_text or not self.all_cached_inventory: return
 
@@ -367,43 +376,67 @@ class DispenseMedicationPage(QWidget):
                 matched_items.append(med)
 
         seen_barcodes = set()
+        row_idx = 0
         for med in matched_items:
-            clean_b = med['barcode']  # هنا الباركود جاهز ونظيف كنص صريح
+            clean_b = med['barcode']
+
+            # 🔥 Fix: Extract clean value if the barcode comes wrapped as a dictionary string or object
+            if isinstance(clean_b, dict):
+                clean_b = clean_b.get('text', '')
+            elif str(clean_b).startswith("{'text':"):
+                # Fallback string parsing just in case it's treated as raw unparsed text
+                try:
+                    import ast
+                    parsed_dict = ast.literal_eval(str(clean_b))
+                    clean_b = parsed_dict.get('text', clean_b)
+                except Exception:
+                    pass
+
             if clean_b not in seen_barcodes:
                 seen_barcodes.add(clean_b)
-                display_text = f"💊 {med['name']} | Strength: {med['dosage']} | (Code: {clean_b})"
-                item = QListWidgetItem(display_text)
-                item.setData(Qt.UserRole, clean_b)
-                self.live_matches_list.addItem(item)
+                self.live_matches_list.insertRow(row_idx)
+
+                name_item = QTableWidgetItem(med["name"])
+                dosage_item = QTableWidgetItem(med["dosage"])
+                barcode_item = QTableWidgetItem(str(clean_b))  # Safely renders clean digits
+
+                name_item.setData(Qt.UserRole, clean_b)
+
+                self.live_matches_list.setItem(row_idx, 0, name_item)
+                self.live_matches_list.setItem(row_idx, 1, dosage_item)
+                self.live_matches_list.setItem(row_idx, 2, barcode_item)
+                row_idx += 1
 
     def handle_scanner_return_pressed(self):
         barcode = self.search_input.text().strip()
         if barcode:
-            if self.live_matches_list.count() > 0:
-                best_item = self.live_matches_list.item(0)
+            if self.live_matches_list.rowCount() > 0:
+                best_item = self.live_matches_list.item(0, 0)
                 barcode = best_item.data(Qt.UserRole)
             self.kb_card.hide()
             self.process_barcode_routing(explicit_barcode=barcode)
 
-    def handle_live_item_selection(self, item):
-        barcode = item.data(Qt.UserRole)
+    def handle_table_row_selection(self, item):
+        row = item.row()
+        name_item = self.live_matches_list.item(row, 0)
+        barcode = name_item.data(Qt.UserRole)
         if barcode:
             self.kb_card.hide()
             self.process_barcode_routing(explicit_barcode=barcode)
 
     def process_barcode_routing(self, explicit_barcode=None):
-        """ جلب الداتا ومعالجة مطابقة حقل الباركود اللوك أب المفتوح """
+        """ Pulls batches and completely tracks against Barcode lookup arrays """
         barcode = explicit_barcode or self.search_input.text().strip()
         if not barcode: return
         barcode = str(barcode).strip()
 
         self.scanned_barcode = barcode
-        self.stock_list_widget.clear()
+        self.batch_table.setRowCount(0)
 
         try:
             self.loaded_batches = airtable_api.find_all_batches_by_barcode(barcode)
 
-            # 🔥 Fallback حرج: مطابقة يدويّة داخل كاش الكلاس للتغلب على مشاكل نوع حقل الـ Linked Field بالسيرفر
+            # Local fallback synchronization
             if not self.loaded_batches and self.all_cached_inventory:
                 for item in self.all_cached_inventory:
                     if item['barcode'] == barcode:
@@ -416,26 +449,45 @@ class DispenseMedicationPage(QWidget):
                         })
 
             if not self.loaded_batches:
-                QMessageBox.warning(self, "No Stock ❌", f"No active medicine found for lookup identity: {barcode}")
+                QMessageBox.warning(self, "No Stock ❌", f"No medication records found matching code: {barcode}")
                 return
 
-            self.med_name_title.setText(f"Medicine: {self.loaded_batches[0]['medicine_name']}")
+            self.med_name_title.setText(f"Medication Type: {self.loaded_batches[0]['medicine_name']}")
             total_pills = sum(int(b['current_quantity']) for b in self.loaded_batches)
-            self.total_stock_lbl.setText(f"Total Stock Available: {total_pills} Pills")
+            self.total_stock_lbl.setText(f"Total Available Cloud Count: {total_pills} Pills")
 
             for idx, b in enumerate(self.loaded_batches):
-                item_text = f"Batch ID: {b['batch_number']} | Expiry Date: {b['expiry_date']} -> ({b['current_quantity']} Pills)"
-                if idx == 0 and int(b['current_quantity']) > 0:
-                    item_text += "  ⭐ [Expires First]"
-                item = QListWidgetItem(item_text)
-                self.stock_list_widget.addItem(item)
+                self.batch_table.insertRow(idx)
+
+                chk_widget = QWidget()
+                chk_layout = QHBoxLayout(chk_widget)
+                chk_layout.setContentsMargins(0, 0, 0, 0)
+                chk_layout.setAlignment(Qt.AlignCenter)
+                chk = QCheckBox()
+                chk_layout.addWidget(chk)
+                self.batch_table.setCellWidget(idx, 0, chk_widget)
+
+                batch_item = QTableWidgetItem(str(b['batch_number']))
+                expiry_item = QTableWidgetItem(str(b['expiry_date']))
+                qty_item = QTableWidgetItem(str(b['current_quantity']))
+                status_item = QTableWidgetItem("⭐ Expires First" if idx == 0 else "Normal")
+
+                batch_item.setData(Qt.UserRole, b)
+
+                self.batch_table.setItem(idx, 1, batch_item)
+                self.batch_table.setItem(idx, 2, expiry_item)
+                self.batch_table.setItem(idx, 3, qty_item)
+                self.batch_table.setItem(idx, 4, status_item)
 
             self.internal_stack.setCurrentIndex(1)
             self.handle_input_focus(self.quantity_input, None)
 
         except Exception as e:
-            print(f"Error loading batches securely: {e}")
+            print(f"Error packing selection grid tables: {e}")
 
+    # =====================================================================
+    # 🧠 HYBRID FIFO ALLOCATION ENGINE
+    # =====================================================================
     def execute_smart_dispense(self):
         qty_str = self.quantity_input.text().strip()
         if not qty_str: return
@@ -444,45 +496,83 @@ class DispenseMedicationPage(QWidget):
             requested_qty = int(qty_str)
             if requested_qty <= 0: return
 
-            total_available = sum(b["current_quantity"] for b in self.loaded_batches)
-            if requested_qty > total_available:
-                QMessageBox.critical(self, "Insufficient Stock ❌",
-                                     f"You requested {requested_qty} pills, but stock only has {total_available}!")
+            # 1. Gather batches explicitly checked by user
+            selected_batches = []
+            for row in range(self.batch_table.rowCount()):
+                chk_widget = self.batch_table.cellWidget(row, 0)
+                if chk_widget:
+                    chk = chk_widget.findChild(QCheckBox)
+                    if chk and chk.isChecked():
+                        batch_data = self.batch_table.item(row, 1).data(Qt.UserRole)
+                        selected_batches.append(batch_data)
+
+            # 2. Determine target calculation workspace pool
+            is_explicit_mode = len(selected_batches) > 0
+            pool_to_calculate = selected_batches if is_explicit_mode else self.loaded_batches
+
+            # Run safety capacity check on the focused pool
+            total_available_in_pool = sum(int(b["current_quantity"]) for b in pool_to_calculate)
+            if requested_qty > total_available_in_pool:
+                pool_name = "the selected boxes" if is_explicit_mode else "total active stock"
+                QMessageBox.critical(self, "Insufficient Stock Count ❌",
+                                     f"Requested {requested_qty} pills, but {pool_name} only contains {total_available_in_pool} available!")
                 return
 
-            confirm = QMessageBox.question(self, "Confirm Dispense ⚡",
-                                           f"Are you sure you want to deduct {requested_qty} pills?",
+            # Enforce strict timestamp sorting for perfect FIFO execution
+            pool_to_calculate.sort(key=lambda x: x["expiry_date"])
+
+            # 3. Simulate FIFO depletion matrix mapping
+            remaining_to_deduct = requested_qty
+            allocation_report = []
+            execution_plan = []
+
+            for batch in pool_to_calculate:
+                if remaining_to_deduct <= 0: break
+                current_qty = int(batch["current_quantity"])
+                if current_qty <= 0: continue
+
+                if current_qty >= remaining_to_deduct:
+                    pills_to_draw = remaining_to_deduct
+                    remaining_to_deduct = 0
+                else:
+                    pills_to_draw = current_qty
+                    remaining_to_deduct -= current_qty
+
+                # 🔥 Formats strategy report by Expiry Date to be intuitive for staff
+                allocation_report.append(f"• Expiry [ {batch['expiry_date']} ] : Take exactly {pills_to_draw} pills.")
+                execution_plan.append({"id": batch["id"], "old_qty": current_qty, "drawn": pills_to_draw})
+
+            # 4. Display confirmation visualization dialog report
+            report_msg = "🎯 Medication Allocation Draw Strategy:\n\n" + "\n".join(allocation_report)
+            confirm = QMessageBox.question(self, "Confirm Secure Allocation Draw ⚡",
+                                           report_msg + "\n\nDo you authorize this cloud inventory deduction?",
                                            QMessageBox.Yes | QMessageBox.No)
             if confirm != QMessageBox.Yes: return
 
-            remaining_to_deduct = requested_qty
-            for batch in self.loaded_batches:
-                if remaining_to_deduct <= 0: break
-                if batch["current_quantity"] <= 0: continue
+            # 5. Commit mutations live to cloud database
+            for plan in execution_plan:
+                new_qty = plan["old_qty"] - plan["drawn"]
+                airtable_api.update_medication_quantity(plan["id"], new_qty)
 
-                if batch["current_quantity"] >= remaining_to_deduct:
-                    new_qty = batch["current_quantity"] - remaining_to_deduct
-                    airtable_api.update_medication_quantity(batch["id"], new_qty)
-                    remaining_to_deduct = 0
-                else:
-                    remaining_to_deduct -= batch["current_quantity"]
-                    airtable_api.update_medication_quantity(batch["id"], 0)
+            # Log transaction footprint securely
+            log_note = "Explicit Batch Multi-Select Draw" if is_explicit_mode else "Full-pool Automatic FIFO Draw"
+            airtable_api.log_transaction("DISPENSE", self.scanned_barcode, self.user_full_name, requested_qty, log_note)
 
-            airtable_api.log_transaction("DISPENSE", self.scanned_barcode, self.user_full_name, requested_qty,
-                                         "Prescription Dispense")
-            QMessageBox.information(self, "Success ✅", f"Successfully dispensed {requested_qty} pills.")
+            QMessageBox.information(self, "Transaction Approved ✅",
+                                    f"Successfully processed {requested_qty} pills using Hybrid Allocation.")
             self.kb_card_s2.hide()
             self.preload_inventory_cache()
             self.internal_stack.setCurrentIndex(0)
             self.clear_page()
+
         except ValueError:
-            QMessageBox.warning(self, "Type Error ⚠️", "Quantity must be a valid number.")
+            QMessageBox.warning(self, "Data Type Error ⚠️", "Please enter a valid integer for required count.")
 
     def clear_page(self):
         self.search_input.clear()
         self.quantity_input.clear()
-        self.stock_list_widget.clear()
-        self.live_matches_list.clear()
+        self.batch_table.setRowCount(0)
+        self.live_matches_list.setRowCount(0)
         self.scanned_barcode = ""
         self.loaded_batches = []
         self.kb_card.hide()
