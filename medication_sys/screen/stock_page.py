@@ -166,7 +166,6 @@ class MedicationManagementPage(QWidget):
 
         main_layout.addWidget(left_card, stretch=5)
 
-        # 🧮 كيبورد الأرقام للشاشة الأولى عريض ومقاوم للسحق عمودياً
         self.kb_card = QFrame()
         self.kb_card.setStyleSheet("background-color: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0;")
         kb_layout = QVBoxLayout(self.kb_card)
@@ -184,7 +183,7 @@ class MedicationManagementPage(QWidget):
             for k in row:
                 btn = QPushButton(k)
                 btn.setFocusPolicy(Qt.NoFocus)
-                btn.setMinimumHeight(45)  # طول فخم للمس
+                btn.setMinimumHeight(45)
                 if k in ['Clear', '⌫', '🔽']:
                     btn.setStyleSheet(
                         "background-color: #CBD5E1; color: #1E293B; font-weight: bold; font-size: 12px; border-radius: 6px; border: none;")
@@ -232,6 +231,12 @@ class MedicationManagementPage(QWidget):
         self.name_input = QLineEdit()
         self.name_input.focusInEvent = lambda event: self.handle_input_focus(self.name_input, event)
         form_layout.addWidget(self.name_input)
+
+        # ✨ הוספת שדה קטגוריה גרפי למסך באופן רשמי ומסודר!
+        form_layout.addWidget(QLabel("Category", styleSheet="font-size: 11px; font-weight: bold; color: #475569;"))
+        self.category_input = QLineEdit()
+        self.category_input.focusInEvent = lambda event: self.handle_input_focus(self.category_input, event)
+        form_layout.addWidget(self.category_input)
 
         form_layout.addWidget(QLabel("Active Pharmaceutical Ingredient",
                                      styleSheet="font-size: 11px; font-weight: bold; color: #475569;"))
@@ -287,14 +292,13 @@ class MedicationManagementPage(QWidget):
 
         main_layout.addWidget(form_card, stretch=5)
 
-        # ⌨️ كيبورد الحروف الكامل العريض والاحترافي الجانبي للمس بدون سحق عمودي
         self.kb_full_card = QFrame()
         self.kb_full_card.setStyleSheet("background-color: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0;")
-        kb_full_layout = QVBoxLayout(self.kb_full_card)
+        kb_full_card_layout = QVBoxLayout(self.kb_full_card)
 
         title_kb2 = QLabel("⌨️ Touch Workspace Keyboard")
         title_kb2.setStyleSheet("font-size: 11px; color: #64748B; font-weight: bold; border: none; margin-bottom: 2px;")
-        kb_full_layout.addWidget(title_kb2)
+        kb_full_card_layout.addWidget(title_kb2)
 
         keyboard_widget = QWidget()
         keyboard_lay = QVBoxLayout(keyboard_widget)
@@ -313,8 +317,7 @@ class MedicationManagementPage(QWidget):
             for key in row:
                 btn = QPushButton(key)
                 btn.setFocusPolicy(Qt.NoFocus)
-
-                btn.setMinimumHeight(42)  # حماية التمدد للمس
+                btn.setMinimumHeight(42)
 
                 if key in ['Clear', '⌫', '🔽']:
                     btn.setStyleSheet("""
@@ -335,14 +338,15 @@ class MedicationManagementPage(QWidget):
                 btn.clicked.connect(lambda checked, k=key: self.handle_key_press(k))
                 r_lay.addWidget(btn)
             keyboard_lay.addLayout(r_lay)
-        kb_full_layout.addWidget(keyboard_widget)
-        kb_full_layout.addStretch()
+        kb_full_card_layout.addWidget(keyboard_widget)
+        kb_full_card_layout.addStretch()
 
         main_layout.addWidget(self.kb_full_card, stretch=5)
 
         self.kb_full_card.hide()
 
         self.name_input.installEventFilter(self)
+        self.category_input.installEventFilter(self)  # רישום לאיוונטים
         self.ingredient_input.installEventFilter(self)
         self.dosage_input.installEventFilter(self)
         self.batch_input.installEventFilter(self)
@@ -352,7 +356,8 @@ class MedicationManagementPage(QWidget):
         self.internal_stack.addWidget(page)
 
     def handle_input_focus(self, input_field, event):
-        for box in [self.barcode_input, self.name_input, self.ingredient_input, self.dosage_input, self.batch_input]:
+        for box in [self.barcode_input, self.name_input, self.category_input, self.ingredient_input, self.dosage_input,
+                    self.batch_input]:
             box.setStyleSheet(
                 "padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 12px; background-color: #F8FAFC; color: #1E293B;")
         self.expiry_input.setStyleSheet(
@@ -377,7 +382,8 @@ class MedicationManagementPage(QWidget):
         if event.type() in [QEvent.MouseButtonPress, QEvent.MouseButtonRelease]:
             if obj == self.barcode_input:
                 self.kb_card.show()
-            elif obj in [self.name_input, self.ingredient_input, self.dosage_input, self.batch_input, self.expiry_input,
+            elif obj in [self.name_input, self.category_input, self.ingredient_input, self.dosage_input,
+                         self.batch_input, self.expiry_input,
                          self.quantity_input]:
                 if hasattr(obj, 'isEnabled') and not obj.isEnabled():
                     return super().eventFilter(obj, event)
@@ -419,7 +425,6 @@ class MedicationManagementPage(QWidget):
         self.current_focused_input.setFocus(Qt.OtherFocusReason)
 
     def check_barcode(self):
-        """ الفحص والربط المتوافق تماماً مع حقل الـ Lookup وجلبه كنص صافي """
         barcode = self.barcode_input.text().strip()
         if not barcode:
             QMessageBox.warning(self, "Error", "Please enter or scan a barcode.")
@@ -430,7 +435,6 @@ class MedicationManagementPage(QWidget):
             existing_batches = airtable_api.find_all_batches_by_barcode(barcode)
 
             if existing_batches:
-                from PyQt5.QtWidgets import QDialog
                 dialog = BatchSelectionDialog(existing_batches, self)
 
                 if dialog.exec_() == QDialog.Accepted:
@@ -443,8 +447,12 @@ class MedicationManagementPage(QWidget):
 
                         self.name_input.setText(str(fields.get("Medicine Name", "")))
                         self.name_input.setEnabled(True)
+
+                        # תיקון קריטי: שימוש בשם הנכון self.category_input
+                        self.category_input.setText(str(fields.get("Category", "")))
+                        self.category_input.setEnabled(True)
+
                         self.ingredient_input.setText(str(fields.get("Active Ingredient", "")))
-                        self.ingredient_input.setEnabled(True)
                         self.dosage_input.setText(str(fields.get("Dosage", "")))
                         self.dosage_input.setEnabled(True)
 
@@ -470,6 +478,11 @@ class MedicationManagementPage(QWidget):
 
                         record = airtable_api.stock_table.get(first_batch["id"])
                         fields = record.get('fields', {})
+
+                        # Smart fill בטוח לקטגוריה
+                        self.category_input.setText(str(fields.get("Category", "")))
+                        self.category_input.setEnabled(False)
+
                         self.ingredient_input.setText(str(fields.get("Active Ingredient", "")))
                         self.ingredient_input.setEnabled(False)
                         self.dosage_input.setText(str(fields.get("Dosage", "")))
@@ -494,6 +507,8 @@ class MedicationManagementPage(QWidget):
                 self.existing_record_id = None
                 self.name_input.clear()
                 self.name_input.setEnabled(True)
+                self.category_input.clear()
+                self.category_input.setEnabled(True)
                 self.ingredient_input.clear()
                 self.ingredient_input.setEnabled(True)
                 self.dosage_input.clear()
@@ -518,6 +533,7 @@ class MedicationManagementPage(QWidget):
         barcode = self.barcode_input.text().strip()
         name = self.name_input.text().strip()
         ingredient = self.ingredient_input.text().strip()
+        cat = self.category_input.text().strip()  # תיקון משתנה לקטגוריה
         dosage = self.dosage_input.text().strip()
         batch = self.batch_input.text().strip()
 
@@ -537,14 +553,17 @@ class MedicationManagementPage(QWidget):
 
         try:
             if self.existing_record_id:
-                record = airtable_api.update_medication_full_fields(self.existing_record_id, name, barcode, ingredient,
-                                                                    dosage, clean_expiry_str, qty, batch)
+                # הוספת cat בצורה נכונה
+                record = airtable_api.update_medication_full_fields(
+                    self.existing_record_id, name, barcode, ingredient,
+                    dosage, clean_expiry_str, qty, batch, cat
+                )
                 if record:
                     QMessageBox.information(self, "Updated ✅", f"Batch record for '{name}' overwritten successfully!")
                     self.clear_all_fields()
             else:
                 record = airtable_api.add_new_medication(
-                    name, barcode, ingredient, dosage, clean_expiry_str, qty, qty, batch,
+                    name, barcode, ingredient, dosage, clean_expiry_str, qty, qty, batch, cat,
                     user_record_id=self.current_user_record_id
                 )
                 if record:
@@ -553,14 +572,14 @@ class MedicationManagementPage(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Server Error ❌", f"Sync process failed:\n{str(e)}")
 
-
-
     def clear_all_fields(self):
         self.barcode_input.clear()
         self.name_input.clear()
         self.name_input.setEnabled(True)
         self.ingredient_input.clear()
         self.ingredient_input.setEnabled(True)
+        self.category_input.clear()  # תיקון שם הרכיב המנוקה
+        self.category_input.setEnabled(True)
         self.dosage_input.clear()
         self.dosage_input.setEnabled(True)
         self.batch_input.clear()

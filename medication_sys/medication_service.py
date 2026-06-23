@@ -5,7 +5,7 @@ import airtable_api
 from datetime import datetime
 
 
-def restock_medication(barcode, medicine_name, active_ingredient, dosage, expiry_date, pills_to_add, batch_number,
+def restock_medication(barcode, medicine_name, active_ingredient, dosage, expiry_date, pills_to_add, batch_number,cat,
                        staff_name):
     """
     Handles inbound medication logic. Always creates a NEW RECORD for different batches/expiry dates.
@@ -22,9 +22,10 @@ def restock_medication(barcode, medicine_name, active_ingredient, dosage, expiry
         existing_med = existing_med_records[0]  # Take the first one found
         fields = existing_med.get('fields', {})
         # Barcode found! Reuse official medication details from the cloud
-        final_name = fields.get('Medicine Name', medicine_name)
+        final_name = fields.get('C', medicine_name)
         final_active = fields.get('Active Ingredient', active_ingredient)
         final_dosage = fields.get('Dosage', dosage)
+        final_category = fields.get('Category', cat)
         print(f"[RESTOCK] Existing barcode detected. Automatically retrieved details for: '{final_name}'")
     else:
         # Brand new barcode - use the manual information provided from the input
@@ -32,6 +33,7 @@ def restock_medication(barcode, medicine_name, active_ingredient, dosage, expiry
         final_name = medicine_name
         final_active = active_ingredient
         final_dosage = dosage
+        final_category = cat
 
     # Strict Requirement: Always create a completely new record for independent batch/expiry tracking
     initial_pills = int(pills_to_add)
@@ -45,7 +47,8 @@ def restock_medication(barcode, medicine_name, active_ingredient, dosage, expiry
         expiry_date=expiry_date,
         initial_pills=initial_pills,
         current_pills=current_pills,
-        batch_number=batch_number
+        batch_number=batch_number,
+        cat=final_category
     )
 
     # Log the transaction to the history table if stock was added successfully

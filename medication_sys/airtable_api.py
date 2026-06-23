@@ -136,7 +136,7 @@ def find_all_batches_by_barcode(barcode):
 
 
 def add_new_medication(medicine_name, barcode, active_ingredient, dosage, expiry_date,
-                       initial_pills, current_pills, batch_number, user_record_id=None):
+                       initial_pills, current_pills, batch_number,category , user_record_id=None):
     """
     Creates a new medication record in the Available_Stock table.
     """
@@ -149,7 +149,8 @@ def add_new_medication(medicine_name, barcode, active_ingredient, dosage, expiry
             "Expiry Date": str(expiry_date),
             "Initial Pills Count": int(initial_pills),
             "Current Pills Count": int(current_pills),
-            "A Batch": str(batch_number)
+            "A Batch": str(batch_number),
+            "Category": str(category)
         }
 
         if user_record_id:
@@ -180,7 +181,7 @@ def update_medication_quantity(record_id, new_pill_count):
 
 
 def update_medication_full_fields(record_id, medicine_name, barcode, active_ingredient, dosage, expiry_date,
-                                  pills_count, batch_number, new_initial_count=None):
+                                  pills_count, batch_number,cat, new_initial_count=None):
     """
     Updates fields of an existing medication record in the Available_Stock table.
     """
@@ -192,7 +193,8 @@ def update_medication_full_fields(record_id, medicine_name, barcode, active_ingr
             "Dosage": str(dosage),
             "Expiry Date": str(expiry_date),
             "Current Pills Count": int(pills_count),
-            "A Batch": str(batch_number)
+            "A Batch": str(batch_number),
+            "A Category": str(cat)
         }
 
         if new_initial_count is not None:
