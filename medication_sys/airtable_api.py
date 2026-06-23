@@ -1,3 +1,7 @@
+import sys
+import os
+from datetime import datetime
+
 from pyairtable import Api
 import config
 
@@ -13,6 +17,38 @@ try:
     print("🌍 Airtable cloud connection successfully initialized!")
 except Exception as e:
     print(f"❌ Error initializing Airtable connection: {e}")
+
+
+# =====================================================================
+# 🛡️ SMART SAFE EXTRACTOR HUB (الدالة العبقرية لحماية وفك جميع حقول السيرفر)
+# =====================================================================
+
+def safe_extract(value, target_type=str):
+    """
+    تفكك أي قيمة قادمة من Airtable بأمان أياً كان شكلها لتفادي كراش القواميس واللستات.
+    تدعم تنظيف حقول مثل {'text': '128'} أو ['450mg'] وتحويلها لنص أو رقم صحيح.
+    """
+    if value is None:
+        return 0 if target_type == int else ""
+
+    # 1. إذا كانت القيمة مصفوفة/لستة، نأخذ العنصر الأول منها
+    if isinstance(value, list):
+        value = value[0] if value else (0 if target_type == int else "")
+
+    # 2. إذا كانت القيمة دكشنري/قاموس مثل {'text': '128'}، نسحب القيمة الداخلية
+    if isinstance(value, dict):
+        value = value.get('text', value.get('value', 0 if target_type == int else ""))
+
+    # 3. التحويل النهائي للنوع المطلوب مع التنظيف
+    try:
+        if target_type == int:
+            # تنظيف النص من أي نقاط عشرية أو فراغات قبل التحويل لرقم
+            clean_str = str(value).split('.')[0].strip()
+            return int(clean_str) if clean_str else 0
+        else:
+            return str(value).strip()
+    except (ValueError, TypeError):
+        return 0 if target_type == int else str(value).strip()
 
 
 # =====================================================================
@@ -49,7 +85,6 @@ def find_medication_by_barcode(barcode_value):
 def get_all_medications_by_barcode(barcode_value):
     """
     Searches for ALL medication records in the cloud based on a unique barcode.
-    Returns a list of raw records.
     """
     try:
         formula = f"{{Barcode}} = '{barcode_value}'"
@@ -62,49 +97,41 @@ def get_all_medications_by_barcode(barcode_value):
 
 def find_all_batches_by_barcode(barcode):
     """
-    Returns all active batches for a specific barcode.
-    Uses 'Barcode lookup' field instead of linked Barcode field.
+    Returns all active batches for a specific barcode using the super safe extractor.
     """
     try:
         records = stock_table.all()
-
         batches = []
 
         for r in records:
-            if hasattr(r, 'fields'):
-                fields = r.fields
-                rec_id = r.id
-            else:
-                fields = r.get('fields', {})
-                rec_id = r.get('id')
+            fields = r.fields if hasattr(r, 'fields') else r.get('fields', {})
+            rec_id = r.id if hasattr(r, 'id') else r.get('id')
 
-            lookup_value = fields.get("Barcode lookup", [])
+            # حماية وفك باركود اللوك أب الموجه من السيرفر
+            lookup_value = safe_extract(fields.get("Barcode lookup"), str)
 
-            # Airtable Lookup fields usually return a list
-            if isinstance(lookup_value, list):
-                lookup_value = str(lookup_value[0]) if lookup_value else ""
-
-            if str(lookup_value).strip() != str(barcode).strip():
+            if lookup_value != str(barcode).strip():
                 continue
 
-            qty = int(fields.get("Current Pills Count", 0))
-
+            # حماية وفك حقل الكمية الرقمي
+            qty = safe_extract(fields.get("Current Pills Count"), int)
             if qty <= 0:
                 continue
 
             batches.append({
                 "id": rec_id,
-                "medicine_name": fields.get("Medicine Name", "Unknown"),
-                "expiry_date": fields.get("Expiry Date", "9999-12-31"),
+                "medicine_name": safe_extract(fields.get("Medicine Name"), str),
+                "expiry_date": safe_extract(fields.get("Expiry Date"), str) if fields.get(
+                    "Expiry Date") else "9999-12-31",
                 "current_quantity": qty,
-                "batch_number": fields.get("A Batch", "N/A")
+                "batch_number": safe_extract(fields.get("A Batch"), str)
             })
 
         batches.sort(key=lambda x: x["expiry_date"])
         return batches
 
     except Exception as e:
-        print(f"❌ Error fetching all batches: {e}")
+        print(f"❌ Error fetching all batches securely: {e}")
         return []
 
 
@@ -112,7 +139,6 @@ def add_new_medication(medicine_name, barcode, active_ingredient, dosage, expiry
                        initial_pills, current_pills, batch_number, user_record_id=None):
     """
     Creates a new medication record in the Available_Stock table.
-    Now links the logged-in user who inserted the batch.
     """
     try:
         fields_data = {
@@ -120,22 +146,22 @@ def add_new_medication(medicine_name, barcode, active_ingredient, dosage, expiry
             "Barcode": str(barcode),
             "Active Ingredient": str(active_ingredient),
             "Dosage": str(dosage),
-            "Expiry Date": str(expiry_date),  # Format: "YYYY-MM-DD"
+            "Expiry Date": str(expiry_date),
             "Initial Pills Count": int(initial_pills),
             "Current Pills Count": int(current_pills),
             "A Batch": str(batch_number)
         }
 
-        # 🔥 إذا تم تمرير الـ record_id للمستخدم، نقوم بربطه كقائمة داخل الحقل المخصص
         if user_record_id:
             fields_data["USER"] = [str(user_record_id)]
 
-        new_record = stock_table.create(fields_data, typecast=True)  # تم إضافة typecast لضمان قبول الربط بسلاسة
+        new_record = stock_table.create(fields_data, typecast=True)
         print(f"✅ Successfully added new medication: {medicine_name}")
         return new_record
     except Exception as e:
         print(f"❌ Error adding new medication to cloud: {e}")
         return None
+
 
 def update_medication_quantity(record_id, new_pill_count):
     """
@@ -154,9 +180,9 @@ def update_medication_quantity(record_id, new_pill_count):
 
 
 def update_medication_full_fields(record_id, medicine_name, barcode, active_ingredient, dosage, expiry_date,
-                                  pills_count, batch_number):
+                                  pills_count, batch_number, new_initial_count=None):
     """
-    Updates all fields of an existing medication record in the Available_Stock table (Correcting mistakes).
+    Updates fields of an existing medication record in the Available_Stock table.
     """
     try:
         fields_to_update = {
@@ -164,10 +190,14 @@ def update_medication_full_fields(record_id, medicine_name, barcode, active_ingr
             "Barcode": str(barcode),
             "Active Ingredient": str(active_ingredient),
             "Dosage": str(dosage),
-            "Expiry Date": str(expiry_date),  # Format: "YYYY-MM-DD"
+            "Expiry Date": str(expiry_date),
             "Current Pills Count": int(pills_count),
             "A Batch": str(batch_number)
         }
+
+        if new_initial_count is not None:
+            fields_to_update["Initial Pills Count"] = int(new_initial_count)
+
         updated_record = stock_table.update(record_id, fields_to_update, typecast=True)
         print(f"✅ Successfully updated medication record ID: {record_id}")
         return updated_record
@@ -178,7 +208,7 @@ def update_medication_full_fields(record_id, medicine_name, barcode, active_ingr
 
 def delete_medication_record(record_id):
     """
-    🔥 دالة خاصة بالـ Manager لحذف سجل دواء/دفعة معينة بالكامل من قاعدة البيانات.
+    حذف سجل دواء/دفعة معينة بالكامل من قاعدة البيانات.
     """
     try:
         stock_table.delete(record_id)
@@ -201,21 +231,27 @@ def get_all_users():
         records = users_table.all()
         user_list = []
         for record in records:
-            if hasattr(record, 'fields'):
-                fields = record.fields.copy()
-                fields['record_id'] = record.id
-            else:
-                fields = record.get('fields', {}).copy()
-                fields['record_id'] = record.get('id')
+            fields = record.fields.copy() if hasattr(record, 'fields') else record.get('fields', {}).copy()
+            rec_id = record.id if hasattr(record, 'id') else record.get('id')
 
-            user_list.append(fields)
+            # حماية حقول اليوزر عند السحب والعرض
+            user_data = {
+                "record_id": rec_id,
+                "Username": safe_extract(fields.get("Username"), str),
+                "Password": safe_extract(fields.get("Password"), str),
+                "Role": safe_extract(fields.get("Role"), str),
+                "PIN Code": safe_extract(fields.get("PIN Code"), str),
+                "Full Name": safe_extract(fields.get("Full Name"), str),
+                "Email": safe_extract(fields.get("Email"), str)
+            }
+            user_list.append(user_data)
         return user_list
     except Exception as e:
-        print(f"❌ Error fetching users from Airtable: {e}")
+        print(f"❌ Error fetching users safely from Airtable: {e}")
         return []
 
 
-def add_new_user(username, password, role, pin_code, full_name):
+def add_new_user(username, password, role, pin_code, full_name, email=""):
     """
     Creates a new user record in the SYSTEM_USERS table.
     """
@@ -227,11 +263,10 @@ def add_new_user(username, password, role, pin_code, full_name):
             "Role": clean_role,
             "PIN Code": str(pin_code).strip(),
             "Full Name": str(full_name).strip(),
+            "Email": str(email).strip(),
             "Last Login": ""
         }
-        print(f"🚀 Sending payload to Airtable: {fields_data}")
         new_record = users_table.create(fields_data, typecast=True)
-        print(f"✅ Successfully added new user: {username} with role {clean_role}")
         return new_record
     except Exception as e:
         print(f"❌ Error adding new user to cloud: {e}")
@@ -240,7 +275,7 @@ def add_new_user(username, password, role, pin_code, full_name):
 
 def update_user_records(record_id, username, password, role, pin_code, full_name):
     """
-    Updates an existing user record in the Users table by its Airtable record_id.
+    Updates an existing user record in the Users table.
     """
     try:
         fields_to_update = {
@@ -251,7 +286,6 @@ def update_user_records(record_id, username, password, role, pin_code, full_name
             "Full Name": str(full_name).strip()
         }
         updated_record = users_table.update(record_id, fields_to_update, typecast=True)
-        print(f"✅ Successfully updated user record ID: {record_id}")
         return updated_record
     except Exception as e:
         print(f"❌ Error updating user in cloud: {e}")
@@ -260,11 +294,10 @@ def update_user_records(record_id, username, password, role, pin_code, full_name
 
 def delete_user_record(record_id):
     """
-    Deletes a user record from the Users table permanently by its Airtable record_id.
+    Deletes a user record permanently.
     """
     try:
         users_table.delete(record_id)
-        print(f"🗑️ Successfully deleted user record ID: {record_id}")
         return True
     except Exception as e:
         print(f"❌ Error deleting user from cloud: {e}")
@@ -273,15 +306,16 @@ def delete_user_record(record_id):
 
 def authenticate_user(username, password):
     """
-    Verifies credentials against the cloud table.
+    Verifies credentials against the cloud table using safe extractor.
     """
     try:
         formula = f"{{Username}} = '{username}'"
         records = users_table.all(formula=formula)
         if records:
-            user_fields = records[0]['fields'] if hasattr(records[0], 'fields') else records[0].get('fields', {})
-            if user_fields.get("Password") == password:
-                return user_fields.get("Role")
+            fields = records[0]['fields'] if hasattr(records[0], 'fields') else records[0].get('fields', {})
+            db_password = safe_extract(fields.get("Password"), str)
+            if db_password == str(password).strip():
+                return safe_extract(fields.get("Role"), str)
         return None
     except Exception as e:
         print(f"❌ Error during authentication: {e}")
@@ -308,7 +342,6 @@ def log_transaction(action_type, barcode, action_by_user, quantity_taken, remova
             fields_data["Removal Reason"] = [str(removal_reason)]
 
         new_record = history_table.create(fields_data, typecast=True)
-        print(f"✅ Successfully logged transaction: {action_type} for barcode {barcode}")
         return new_record
     except Exception as e:
         print(f"❌ Error logging transaction to cloud: {e}")

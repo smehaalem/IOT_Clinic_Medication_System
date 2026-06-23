@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QFrame, QMessageBox, QStackedWidget, QDateEdit, QSpinBox,
-    QDialog, QListWidget
+    QDialog, QListWidget, QListWidgetItem
 )
 
 from PyQt5.QtCore import Qt, QDate, QEvent
@@ -21,26 +21,30 @@ class BatchSelectionDialog(QDialog):
     def __init__(self, batches, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Product Batches Detected")
-        self.setFixedWidth(360)
+        self.setFixedWidth(380)
         self.selected_batch = None
         self.action_type = None  # "edit" or "new"
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(6)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
 
         title = QLabel("Multiple Batches Found!")
-        title.setStyleSheet("font-size: 14px; font-weight: bold; color: #0EA5E9;")
+        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0EA5E9;")
         layout.addWidget(title)
 
         desc = QLabel(
             "We found existing batches for this barcode.\nSelect a batch to EDIT or choose to create a NEW one:")
-        desc.setStyleSheet("font-size: 11px;")
+        desc.setStyleSheet("font-size: 12px; color: #475569;")
         layout.addWidget(desc)
 
         self.list_widget = QListWidget()
-        self.list_widget.setStyleSheet("font-size: 11px;")
-        from PyQt5.QtWidgets import QListWidgetItem
+        self.list_widget.setStyleSheet("""
+            QListWidget { border: 1px solid #E2E8F0; border-radius: 6px; font-size: 11px; padding: 4px; }
+            QListWidget::item { padding: 6px; border-bottom: 1px solid #F1F5F9; }
+            QListWidget::item:selected { background-color: #F0F9FF; color: #0369A1; font-weight: bold; }
+        """)
+
         for b in batches:
             item_text = f"Batch: {b['batch_number']} | Exp: {b['expiry_date']} (📦 {b['current_quantity']} Pills)"
             item = QListWidgetItem(item_text)
@@ -49,14 +53,16 @@ class BatchSelectionDialog(QDialog):
         layout.addWidget(self.list_widget)
 
         btn_layout = QHBoxLayout()
-        edit_btn = QPushButton("✏️ Edit Selected Batch")
+        edit_btn = QPushButton("✏️ Edit Selected")
+        edit_btn.setMinimumHeight(32)
         edit_btn.setStyleSheet(
-            "background-color: #EA580C; color: white; padding: 6px; font-size: 11px; font-weight: bold; border-radius: 6px; border: none;")
+            "background-color: #EA580C; color: white; font-size: 12px; font-weight: bold; border-radius: 6px; border: none;")
         edit_btn.clicked.connect(self.on_edit_clicked)
 
-        new_batch_btn = QPushButton("➕ Create New Batch")
+        new_batch_btn = QPushButton("➕ Create New")
+        new_batch_btn.setMinimumHeight(32)
         new_batch_btn.setStyleSheet(
-            "background-color: #0D9488; color: white; padding: 6px; font-size: 11px; font-weight: bold; border-radius: 6px; border: none;")
+            "background-color: #0D9488; color: white; font-size: 12px; font-weight: bold; border-radius: 6px; border: none;")
         new_batch_btn.clicked.connect(self.on_new_clicked)
 
         btn_layout.addWidget(edit_btn)
@@ -109,23 +115,25 @@ class MedicationManagementPage(QWidget):
         page.setStyleSheet("background-color: #F8FAFC;")
 
         main_layout = QHBoxLayout(page)
-        main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(12)
 
         left_card = QFrame()
         left_card.setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;")
         left_layout = QVBoxLayout(left_card)
         left_layout.setContentsMargins(15, 15, 15, 15)
-        left_layout.setSpacing(10)
+        left_layout.setSpacing(8)
 
         header_layout = QHBoxLayout()
         title = QLabel("📦 Stock Ingestion Engine")
-        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0F172A; border: none;")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0F172A; border: none;")
 
         back_btn = QPushButton("⬅️ Menu")
         back_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        back_btn.setStyleSheet(
-            "padding: 4px 10px; font-size: 11px; background-color: #F1F5F9; border-radius: 6px; font-weight: bold; color: #475569; border: 1px solid #E2E8F0;")
+        back_btn.setStyleSheet("""
+            QPushButton { padding: 6px 14px; font-size: 12px; background-color: #F1F5F9; border-radius: 6px; font-weight: bold; color: #475569; border: 1px solid #E2E8F0; }
+            QPushButton:hover { background-color: #E2E8F0; }
+        """)
         back_btn.clicked.connect(self.clear_all_fields)
         back_btn.clicked.connect(self.on_back_to_menu)
         header_layout.addWidget(title)
@@ -134,7 +142,10 @@ class MedicationManagementPage(QWidget):
         left_layout.addLayout(header_layout)
 
         left_layout.addSpacing(10)
-        left_layout.addWidget(QLabel("Scan Product Barcode Identity:"))
+        lbl_barcode = QLabel("Scan Product Barcode Identity:")
+        lbl_barcode.setStyleSheet("font-size: 12px; font-weight: bold; color: #475569;")
+        left_layout.addWidget(lbl_barcode)
+
         self.barcode_input = QLineEdit()
         self.barcode_input.setPlaceholderText("Scan barcode or enter manually...")
         self.barcode_input.setStyleSheet(
@@ -145,18 +156,24 @@ class MedicationManagementPage(QWidget):
 
         search_btn = QPushButton("🔍 Verify Cloud & Smart Fill")
         search_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        search_btn.setStyleSheet(
-            "background-color: #0D9488; color: white; padding: 10px; font-weight: bold; border-radius: 6px; border: none; font-size: 12px;")
+        search_btn.setStyleSheet("""
+            QPushButton { background-color: #0D9488; color: white; padding: 10px; font-weight: bold; border-radius: 6px; border: none; font-size: 12px; }
+            QPushButton:hover { background-color: #0F766E; }
+        """)
         search_btn.clicked.connect(self.check_barcode)
         left_layout.addWidget(search_btn)
         left_layout.addStretch()
 
         main_layout.addWidget(left_card, stretch=5)
 
+        # 🧮 كيبورد الأرقام للشاشة الأولى عريض ومقاوم للسحق عمودياً
         self.kb_card = QFrame()
-        self.kb_card.setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;")
+        self.kb_card.setStyleSheet("background-color: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0;")
         kb_layout = QVBoxLayout(self.kb_card)
-        kb_layout.addWidget(QLabel("Numeric Entry Pad:"))
+
+        title_pad = QLabel("🧮 Numerical Entry Pad:")
+        title_pad.setStyleSheet("font-size: 11px; color: #64748B; font-weight: bold; padding-left: 2px;")
+        kb_layout.addWidget(title_pad)
 
         num_grid = QVBoxLayout()
         num_grid.setSpacing(4)
@@ -167,12 +184,13 @@ class MedicationManagementPage(QWidget):
             for k in row:
                 btn = QPushButton(k)
                 btn.setFocusPolicy(Qt.NoFocus)
+                btn.setMinimumHeight(45)  # طول فخم للمس
                 if k in ['Clear', '⌫', '🔽']:
                     btn.setStyleSheet(
-                        "background-color: #CBD5E1; color: #1E293B; font-weight: bold; padding: 12px 0; font-size: 11px; border-radius: 6px; border: none;")
+                        "background-color: #CBD5E1; color: #1E293B; font-weight: bold; font-size: 12px; border-radius: 6px; border: none;")
                 else:
                     btn.setStyleSheet(
-                        "background-color: #F1F5F9; color: #1E293B; font-weight: 600; padding: 12px 0; font-size: 11px; border-radius: 6px; border: 1px solid #E2E8F0;")
+                        "background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 12px; border-radius: 6px; border: 1px solid #CBD5E1;")
                 btn.clicked.connect(lambda checked, key=k: self.handle_key_press(key))
                 r_lay.addWidget(btn)
             num_grid.addLayout(r_lay)
@@ -191,82 +209,98 @@ class MedicationManagementPage(QWidget):
         page.setStyleSheet("background-color: #F8FAFC;")
 
         main_layout = QHBoxLayout(page)
-        main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(12)
 
         form_card = QFrame()
         form_card.setStyleSheet("""
             background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;
             QLineEdit, QDateEdit, QSpinBox {
-                padding: 5px; border: 1px solid #CBD5E1; border-radius: 6px; 
-                font-size: 11px; background-color: #F8FAFC; color: #0F172A;
+                padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; 
+                font-size: 12px; background-color: #F8FAFC; color: #0F172A;
             }
         """)
         form_layout = QVBoxLayout(form_card)
-        form_layout.setContentsMargins(10, 10, 10, 10)
-        form_layout.setSpacing(3)
+        form_layout.setContentsMargins(15, 15, 15, 15)
+        form_layout.setSpacing(4)
 
         self.form_title = QLabel("Register New Medication Stock")
-        self.form_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #0D9488; margin-bottom: 2px;")
+        self.form_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #0D9488; margin-bottom: 2px;")
         form_layout.addWidget(self.form_title)
 
-        form_layout.addWidget(QLabel("Medicine Name"))
+        form_layout.addWidget(QLabel("Medicine Name", styleSheet="font-size: 11px; font-weight: bold; color: #475569;"))
         self.name_input = QLineEdit()
         self.name_input.focusInEvent = lambda event: self.handle_input_focus(self.name_input, event)
         form_layout.addWidget(self.name_input)
 
-        form_layout.addWidget(QLabel("Active Pharmaceutical Ingredient"))
+        form_layout.addWidget(QLabel("Active Pharmaceutical Ingredient",
+                                     styleSheet="font-size: 11px; font-weight: bold; color: #475569;"))
         self.ingredient_input = QLineEdit()
         self.ingredient_input.focusInEvent = lambda event: self.handle_input_focus(self.ingredient_input, event)
         form_layout.addWidget(self.ingredient_input)
 
-        form_layout.addWidget(QLabel("Dosage Strength (mg/ml)"))
+        form_layout.addWidget(
+            QLabel("Dosage Strength (mg/ml)", styleSheet="font-size: 11px; font-weight: bold; color: #475569;"))
         self.dosage_input = QLineEdit()
         self.dosage_input.focusInEvent = lambda event: self.handle_input_focus(self.dosage_input, event)
         form_layout.addWidget(self.dosage_input)
 
-        form_layout.addWidget(QLabel("Batch Number / Serial"))
+        form_layout.addWidget(
+            QLabel("Batch Number / Serial", styleSheet="font-size: 11px; font-weight: bold; color: #475569;"))
         self.batch_input = QLineEdit()
         self.batch_input.focusInEvent = lambda event: self.handle_input_focus(self.batch_input, event)
         form_layout.addWidget(self.batch_input)
 
-        form_layout.addWidget(QLabel("Product Expiry Date"))
+        form_layout.addWidget(
+            QLabel("Product Expiry Date", styleSheet="font-size: 11px; font-weight: bold; color: #475569;"))
         self.expiry_input = QDateEdit()
         self.expiry_input.setCalendarPopup(True)
         self.expiry_input.setDate(QDate.currentDate())
         self.expiry_input.focusInEvent = lambda event: self.handle_input_focus(self.expiry_input, event)
         form_layout.addWidget(self.expiry_input)
 
-        form_layout.addWidget(QLabel("Pills Count (Quantity)"))
+        form_layout.addWidget(
+            QLabel("Pills Count (Quantity)", styleSheet="font-size: 11px; font-weight: bold; color: #475569;"))
         self.quantity_input = QSpinBox()
         self.quantity_input.setRange(1, 5000)
         self.quantity_input.focusInEvent = lambda event: self.handle_input_focus(self.quantity_input, event)
         form_layout.addWidget(self.quantity_input)
 
+        main_layout.addSpacing(4)
+
         self.submit_med_btn = QPushButton("💾 Commit New Stock to Cloud")
         self.submit_med_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.submit_med_btn.setStyleSheet(
-            "background-color: #0D9488; color: white; padding: 8px; font-weight: bold; border-radius: 6px; border: none; font-size: 12px; margin-top: 2px;")
+        self.submit_med_btn.setStyleSheet("""
+            QPushButton { background-color: #0D9488; color: white; padding: 10px; font-weight: bold; border-radius: 6px; border: none; font-size: 12px; }
+            QPushButton:hover { background-color: #0F766E; }
+        """)
         self.submit_med_btn.clicked.connect(self.save_medication)
         form_layout.addWidget(self.submit_med_btn)
 
         cancel_btn = QPushButton("❌ Cancel & Go Back")
-        cancel_btn.setStyleSheet(
-            "background-color: #F1F5F9; color: #475569; padding: 5px; font-size: 11px; font-weight: 600; border-radius: 6px; border: 1px solid #E2E8F0;")
+        cancel_btn.setStyleSheet("""
+            QPushButton { background-color: #F1F5F9; color: #475569; padding: 6px; font-size: 11px; font-weight: 600; border-radius: 6px; border: 1px solid #E2E8F0; }
+            QPushButton:hover { background-color: #E2E8F0; }
+        """)
         cancel_btn.clicked.connect(lambda: self.internal_stack.setCurrentIndex(0))
         form_layout.addWidget(cancel_btn)
 
         main_layout.addWidget(form_card, stretch=5)
 
+        # ⌨️ كيبورد الحروف الكامل العريض والاحترافي الجانبي للمس بدون سحق عمودي
         self.kb_full_card = QFrame()
-        self.kb_full_card.setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;")
+        self.kb_full_card.setStyleSheet("background-color: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0;")
         kb_full_layout = QVBoxLayout(self.kb_full_card)
-        kb_full_layout.addWidget(QLabel("Form Touch Input Workspace:"))
+
+        title_kb2 = QLabel("⌨️ Touch Workspace Keyboard")
+        title_kb2.setStyleSheet("font-size: 11px; color: #64748B; font-weight: bold; border: none; margin-bottom: 2px;")
+        kb_full_layout.addWidget(title_kb2)
 
         keyboard_widget = QWidget()
         keyboard_lay = QVBoxLayout(keyboard_widget)
         keyboard_lay.setContentsMargins(0, 0, 0, 0)
-        keyboard_lay.setSpacing(3)
+        keyboard_lay.setSpacing(4)
+
         rows = [
             ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
             ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
@@ -275,26 +309,36 @@ class MedicationManagementPage(QWidget):
         ]
         for row in rows:
             r_lay = QHBoxLayout()
-            r_lay.setSpacing(3)
+            r_lay.setSpacing(4)
             for key in row:
                 btn = QPushButton(key)
                 btn.setFocusPolicy(Qt.NoFocus)
-                btn.setStyleSheet(
-                    "background-color: #F1F5F9; color: #1E293B; font-weight: 600; padding: 10px 2px; font-size: 11px; border-radius: 4px; border: 1px solid #E2E8F0;")
+
+                btn.setMinimumHeight(42)  # حماية التمدد للمس
+
                 if key in ['Clear', '⌫', '🔽']:
-                    btn.setStyleSheet(
-                        "background-color: #CBD5E1; color: #1E293B; font-weight: bold; padding: 10px 2px; font-size: 11px; border-radius: 4px; border: none;")
+                    btn.setStyleSheet("""
+                        QPushButton { background-color: #CBD5E1; color: #1E293B; font-weight: bold; font-size: 11px; border-radius: 6px; border: none; }
+                        QPushButton:pressed { background-color: #94A3B8; }
+                    """)
                 elif key == ' ':
                     btn.setText("Space")
-                    btn.setStyleSheet(
-                        "background-color: #F1F5F9; color: #1E293B; font-weight: bold; padding: 10px 2px; font-size: 11px; border-radius: 4px; min-width: 40px;")
+                    btn.setStyleSheet("""
+                        QPushButton { background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 11px; border: 1px solid #CBD5E1; border-radius: 6px; min-width: 40px; }
+                        QPushButton:pressed { background-color: #E2E8F0; }
+                    """)
+                else:
+                    btn.setStyleSheet("""
+                        QPushButton { background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 11px; border: 1px solid #CBD5E1; border-radius: 6px; }
+                        QPushButton:pressed { background-color: #E2E8F0; }
+                    """)
                 btn.clicked.connect(lambda checked, k=key: self.handle_key_press(k))
                 r_lay.addWidget(btn)
             keyboard_lay.addLayout(r_lay)
         kb_full_layout.addWidget(keyboard_widget)
         kb_full_layout.addStretch()
 
-        main_layout.addWidget(self.kb_full_card, stretch=4)
+        main_layout.addWidget(self.kb_full_card, stretch=5)
 
         self.kb_full_card.hide()
 
@@ -310,11 +354,11 @@ class MedicationManagementPage(QWidget):
     def handle_input_focus(self, input_field, event):
         for box in [self.barcode_input, self.name_input, self.ingredient_input, self.dosage_input, self.batch_input]:
             box.setStyleSheet(
-                "padding: 5px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 11px; background-color: #F8FAFC;")
+                "padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 12px; background-color: #F8FAFC; color: #1E293B;")
         self.expiry_input.setStyleSheet(
-            "padding: 5px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 11px; background-color: #F8FAFC; color: #0F172A;")
+            "padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 12px; background-color: #F8FAFC; color: #0F172A;")
         self.quantity_input.setStyleSheet(
-            "padding: 5px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 11px; background-color: #F8FAFC; color: #0F172A;")
+            "padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 12px; background-color: #F8FAFC; color: #0F172A;")
 
         self.current_focused_input = input_field
 
@@ -327,7 +371,7 @@ class MedicationManagementPage(QWidget):
                 super(QDateEdit, input_field).focusInEvent(event)
 
         input_field.setStyleSheet(
-            "padding: 5px; border: 2px solid #0D9488; border-radius: 6px; font-size: 11px; background-color: #F0FDFA; color: #0F172A; font-weight: bold;")
+            "padding: 6px; border: 2px solid #0D9488; border-radius: 6px; font-size: 12px; background-color: #F0FDFA; color: #0F172A; font-weight: bold;")
 
     def eventFilter(self, obj, event):
         if event.type() in [QEvent.MouseButtonPress, QEvent.MouseButtonRelease]:
@@ -375,7 +419,7 @@ class MedicationManagementPage(QWidget):
         self.current_focused_input.setFocus(Qt.OtherFocusReason)
 
     def check_barcode(self):
-        """ 🔥 تم الإصلاح التام بربط مفاتيح قاموس الـ API الموحدة الصغير بدقة """
+        """ الفحص والربط المتوافق تماماً مع حقل الـ Lookup وجلبه كنص صافي """
         barcode = self.barcode_input.text().strip()
         if not barcode:
             QMessageBox.warning(self, "Error", "Please enter or scan a barcode.")
@@ -397,7 +441,6 @@ class MedicationManagementPage(QWidget):
                         record = airtable_api.stock_table.get(self.existing_record_id)
                         fields = record.get('fields', {})
 
-                        # استخدام حقول السيرفر وعرضها بشكل كامل وصحيح
                         self.name_input.setText(str(fields.get("Medicine Name", "")))
                         self.name_input.setEnabled(True)
                         self.ingredient_input.setText(str(fields.get("Active Ingredient", "")))
@@ -405,7 +448,6 @@ class MedicationManagementPage(QWidget):
                         self.dosage_input.setText(str(fields.get("Dosage", "")))
                         self.dosage_input.setEnabled(True)
 
-                        # 🔥 سحب البيانات من المفاتيح الموحدة الصغرى المرجوعة من الدالة بدقة!
                         self.batch_input.setText(str(selected.get("batch_number", "")))
                         self.batch_input.setEnabled(True)
                         self.expiry_input.setDate(QDate.fromString(selected.get("expiry_date", ""), "yyyy-MM-dd"))
@@ -423,7 +465,6 @@ class MedicationManagementPage(QWidget):
                         self.existing_record_id = None
                         first_batch = existing_batches[0]
 
-                        # 🔥 جلب الاسم الموحد من الدالة لضمان استجابة السيرفر الفورية
                         self.name_input.setText(str(first_batch.get("medicine_name", "")))
                         self.name_input.setEnabled(False)
 
@@ -511,6 +552,8 @@ class MedicationManagementPage(QWidget):
                     self.clear_all_fields()
         except Exception as e:
             QMessageBox.critical(self, "Server Error ❌", f"Sync process failed:\n{str(e)}")
+
+
 
     def clear_all_fields(self):
         self.barcode_input.clear()

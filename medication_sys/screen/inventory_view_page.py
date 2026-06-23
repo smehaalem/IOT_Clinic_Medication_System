@@ -16,7 +16,7 @@ import airtable_api
 class InventoryViewPage(QWidget):
     """
     Modern Inventory Browser with dynamic live filtering and touch keyboard.
-    ⚠️ UPDATED: Automatically sorts medication by Expiry Date (Soonest first).
+    ⚠️ UPDATED: Supports Airtable Barcode Lookup fields and optimized Touch Layout.
     """
 
     def __init__(self, parent=None, on_back_to_menu=None):
@@ -49,12 +49,17 @@ class InventoryViewPage(QWidget):
 
         header_layout = QHBoxLayout()
         title = QLabel("📋 View Clinic Inventory")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0F172A; border: none;")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #4F46E5; border: none;")
 
         back_btn = QPushButton("⬅️ Menu")
         back_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        back_btn.setStyleSheet(
-            "padding: 4px 10px; font-size: 11px; background-color: #F1F5F9; border-radius: 6px; font-weight: bold; color: #475569; border: 1px solid #E2E8F0;")
+        back_btn.setStyleSheet("""
+            QPushButton {
+                padding: 4px 10px; font-size: 11px; background-color: #F1F5F9; border-radius: 6px; 
+                font-weight: bold; color: #475569; border: 1px solid #E2E8F0;
+            }
+            QPushButton:hover { background-color: #E2E8F0; }
+        """)
         back_btn.clicked.connect(self.clear_page)
         back_btn.clicked.connect(self.on_back_to_menu)
 
@@ -84,20 +89,30 @@ class InventoryViewPage(QWidget):
         left_layout.addWidget(self.search_input)
 
         self.inventory_list_widget = QListWidget()
-        self.inventory_list_widget.setStyleSheet(
-            "border: 1px solid #E2E8F0; border-radius: 6px; background: #F8FAFC; font-size: 11px;")
+        self.inventory_list_widget.setStyleSheet("""
+            QListWidget { border: 1px solid #E2E8F0; border-radius: 6px; background: #F8FAFC; font-size: 11px; }
+            QListWidget::item { padding: 6px; border-bottom: 1px solid #F1F5F9; color: #1E293B; }
+        """)
         left_layout.addWidget(self.inventory_list_widget)
 
         main_layout.addWidget(left_card, stretch=5)
 
+        # ⌨️ كيبورد اللمس المطور والمحمي من السحق عمودياً لشاشات الرازبري
         self.kb_card = QFrame()
-        self.kb_card.setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;")
+        self.kb_card.setStyleSheet("background-color: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0;")
         kb_layout = QVBoxLayout(self.kb_card)
+        kb_layout.setContentsMargins(8, 8, 8, 8)
+        kb_layout.setSpacing(4)
+
+        title_kb = QLabel("⌨️ Touch Workspace Keyboard")
+        title_kb.setStyleSheet("font-size: 11px; color: #64748B; font-weight: bold; border: none; margin-bottom: 2px;")
+        kb_layout.addWidget(title_kb)
 
         keyboard_widget = QWidget()
         keyboard_lay = QVBoxLayout(keyboard_widget)
         keyboard_lay.setContentsMargins(0, 0, 0, 0)
-        keyboard_lay.setSpacing(3)
+        keyboard_lay.setSpacing(4)
+
         rows = [
             ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
             ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
@@ -106,26 +121,38 @@ class InventoryViewPage(QWidget):
         ]
         for row in rows:
             r_lay = QHBoxLayout()
-            r_lay.setSpacing(3)
+            r_lay.setSpacing(4)
             for key in row:
                 btn = QPushButton(key)
                 btn.setFocusPolicy(Qt.NoFocus)
-                btn.setStyleSheet(
-                    "background-color: #F1F5F9; color: #1E293B; font-weight: 600; padding: 10px 2px; font-size: 11px; border-radius: 4px; border: 1px solid #E2E8F0;")
+
+                # 🔥 تمديد الارتفاع عمودياً لراحة إصبع الطبيب أو الممرض ومنع حشر الأزرار
+                btn.setMinimumHeight(42)
+
                 if key in ['Clear', '⌫', '🔽 Hide']:
-                    btn.setStyleSheet(
-                        "background-color: #CBD5E1; color: #1E293B; font-weight: bold; padding: 10px 2px; font-size: 11px; border-radius: 4px; border: none;")
+                    btn.setStyleSheet("""
+                        QPushButton { background-color: #CBD5E1; color: #1E293B; font-weight: bold; font-size: 11px; border-radius: 5px; border: none; padding: 6px 0px; }
+                        QPushButton:pressed { background-color: #94A3B8; }
+                    """)
                 elif key == ' ':
                     btn.setText("Space")
-                    btn.setStyleSheet(
-                        "background-color: #F1F5F9; color: #1E293B; font-weight: bold; padding: 10px 2px; font-size: 11px; border-radius: 4px; min-width: 50px;")
+                    btn.setStyleSheet("""
+                        QPushButton { background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 11px; border: 1px solid #CBD5E1; border-radius: 5px; min-width: 55px; padding: 6px 0px; }
+                        QPushButton:pressed { background-color: #E2E8F0; }
+                    """)
+                else:
+                    btn.setStyleSheet("""
+                        QPushButton { background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 11px; border: 1px solid #CBD5E1; border-radius: 5px; padding: 6px 0px; }
+                        QPushButton:pressed { background-color: #E2E8F0; }
+                    """)
                 btn.clicked.connect(lambda checked, k=key: self.handle_key_press(k))
                 r_lay.addWidget(btn)
             keyboard_lay.addLayout(r_lay)
-        kb_layout.addWidget(keyboard_widget)
+
+        kb_layout.addLayout(keyboard_lay)
         kb_layout.addStretch()
 
-        main_layout.addWidget(self.kb_card, stretch=4)
+        main_layout.addWidget(self.kb_card, stretch=5)
 
         self.kb_card.hide()
 
@@ -133,7 +160,7 @@ class InventoryViewPage(QWidget):
         self.search_input.setFocus()
 
     def refresh_inventory_data(self):
-        """ جلب البيانات وترتيبها تلقائياً من التاريخ الأقرب للانتهاء إلى الأبعد """
+        """ جلب البيانات وترتيبها تلقائياً مع تفكيك حقل الباركود اللوك أب الجديد """
         self.inventory_list_widget.clear()
         self.all_cached_inventory = []
         try:
@@ -144,17 +171,24 @@ class InventoryViewPage(QWidget):
                 fields = r.fields if hasattr(r, 'fields') else r.get('fields', {})
                 qty = int(fields.get("Current Pills Count", 0))
                 if qty > 0:
+                    # 🔥 معالجة جلب الباركود النظيف من حقل الـ Lookup الجديد كلياً لمنع المشاكل
+                    raw_b = fields.get("Barcode lookup") or fields.get("Barcode", "")
+                    if isinstance(raw_b, list):
+                        clean_b = str(raw_b[0]).strip() if raw_b else ""
+                    else:
+                        clean_b = str(raw_b).strip()
+
                     self.all_cached_inventory.append({
                         "name": fields.get("Medicine Name", "Unknown"),
-                        "barcode": fields.get("Barcode", ""),
+                        "barcode": clean_b,
                         "ingredient": fields.get("Active Ingredient", ""),
                         "dosage": fields.get("Dosage", ""),
                         "qty": qty,
                         "batch": fields.get("A Batch", "N/A"),
-                        "expiry": fields.get("Expiry Date", "9999-12-31")  # وضع تاريخ افتراضي بعيد في حال خلو الحقل
+                        "expiry": fields.get("Expiry Date", "9999-12-31")
                     })
 
-            # 🔥 الذكاء المطلوب: ترتيب الداتا لايف بناءً على الـ Expiry Date (الأقرب فالأبعد)
+            # ترتيب البيانات من الأقرب صلاحية إلى الأبعد
             self.all_cached_inventory.sort(key=lambda x: x['expiry'])
 
             self.show_items_in_list(self.all_cached_inventory)
@@ -164,14 +198,16 @@ class InventoryViewPage(QWidget):
     def show_items_in_list(self, items_list):
         self.inventory_list_widget.clear()
         for med in items_list:
-            clean_b = med['barcode'][0] if isinstance(med['barcode'], list) else med['barcode']
-            # إضافة تاريخ انتهاء الصلاحية بشكل بارز بجانب كل دواء في القائمة
-            display_text = f"📅 [{med['expiry']}] | 💊 {med['name']} ({med['dosage']}) | Code: {clean_b} | Batch: {med['batch']} | Qty: {med['qty']}"
+            # هنا الباركود جاهز ومنظف كنص صريح مباشر
+            display_text = f"📅 [{med['expiry']}] | 💊 {med['name']} ({med['dosage']}) | Code: {med['barcode']} | Batch: {med['batch']} | Qty: {med['qty']}"
             self.inventory_list_widget.addItem(QListWidgetItem(display_text))
 
     def handle_input_focus(self, input_field, event):
         self.current_focused_input = input_field
-        super(QLineEdit, input_field).focusInEvent(event)
+        if event:
+            super(QLineEdit, input_field).focusInEvent(event)
+        input_field.setStyleSheet(
+            "padding: 8px; border: 2px solid #6366F1; border-radius: 6px; font-size: 12px; background-color: #F5F3FF; color: #0F172A; font-weight: bold;")
         input_field.setFocus(Qt.OtherFocusReason)
 
     def eventFilter(self, obj, event):
@@ -180,7 +216,7 @@ class InventoryViewPage(QWidget):
             if event.type() in [QEvent.MouseButtonPress, QEvent.MouseButtonRelease]:
                 self.kb_card.show()
                 s_input.setStyleSheet(
-                    "padding: 8px; border: 2px solid #0D9488; border-radius: 6px; font-size: 12px; background-color: #F0FDFA; color: #0F172A; font-weight: bold;")
+                    "padding: 8px; border: 2px solid #6366F1; border-radius: 6px; font-size: 12px; background-color: #F5F3FF; color: #0F172A; font-weight: bold;")
         return super().eventFilter(obj, event)
 
     def handle_key_press(self, key):
@@ -189,7 +225,8 @@ class InventoryViewPage(QWidget):
 
         if key == '🔽 Hide':
             self.kb_card.hide()
-            self.search_input.setStyleSheet("padding: 8px; font-size: 12px; background-color: #FFFFFF; color: #0F172A;")
+            self.search_input.setStyleSheet(
+                "padding: 8px; font-size: 12px; background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 6px;")
             return
         elif key == '⌫':
             self.current_focused_input.setText(current_text[:-1])
@@ -212,20 +249,16 @@ class InventoryViewPage(QWidget):
         for med in self.all_cached_inventory:
             field_val = ""
             if search_type == "Medicine Name":
-                field_val = med["name"]
+                val_to_check = med["name"]
             elif search_type == "Barcode":
-                field_val = med["barcode"]
+                val_to_check = med["barcode"]
             elif search_type == "Active Ingredient":
-                field_val = med["ingredient"]
+                val_to_check = med["ingredient"]
             elif search_type == "Batch ID":
-                field_val = med["batch"]
+                val_to_check = med["batch"]
 
-            if isinstance(field_val, list):
-                field_val = field_val[0] if field_val else ""
-
-            field_val = str(field_val).lower()
-
-            if search_text in field_val:
+            val_to_check = str(val_to_check).lower()
+            if search_text in val_to_check:
                 filtered.append(med)
 
         self.show_items_in_list(filtered)
@@ -235,4 +268,5 @@ class InventoryViewPage(QWidget):
         self.inventory_list_widget.clear()
         self.all_cached_inventory = []
         self.kb_card.hide()
-        self.search_input.setStyleSheet("padding: 8px; font-size: 12px; background-color: #FFFFFF; color: #0F172A;")
+        self.search_input.setStyleSheet(
+            "padding: 8px; font-size: 12px; background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 6px;")
