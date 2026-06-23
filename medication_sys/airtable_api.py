@@ -94,7 +94,6 @@ def get_all_medications_by_barcode(barcode_value):
         print(f"❌ Error searching medications by barcode: {e}")
         return []
 
-
 def find_all_batches_by_barcode(barcode):
     """
     Returns all active batches for a specific barcode using the super safe extractor.
