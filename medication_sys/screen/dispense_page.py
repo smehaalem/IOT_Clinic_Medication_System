@@ -18,7 +18,7 @@ class DispenseMedicationPage(QWidget):
     """
     Advanced Medication Dispensing Core Workspace.
     Supports dynamic Hybrid FIFO calculations, explicit batch selection, tabular UX layouts,
-    and fully targets the 'Barcode lookup' fields.
+    and optimized touchscreen scroll behaviors with enhanced large text visibility.
     """
 
     def __init__(self, parent=None, on_back_to_menu=None):
@@ -60,7 +60,6 @@ class DispenseMedicationPage(QWidget):
                 fields = r.fields if hasattr(r, 'fields') else r.get('fields', {})
                 qty = airtable_api.safe_extract(fields.get("Current Pills Count"), int)
                 if qty > 0:
-                    # 🔥 Targeted: Extracting dynamically from Barcode lookup field
                     raw_b = fields.get("Barcode lookup") or fields.get("Barcode", "")
                     if isinstance(raw_b, list):
                         clean_b = str(raw_b[0]).strip() if raw_b else ""
@@ -81,7 +80,7 @@ class DispenseMedicationPage(QWidget):
             print(f"⚠️ Stock cache bypass log: {e}")
 
     # =====================================================================
-    # 🎴 SCREEN 0: Live Search & Scanner Entry Layout
+    # 🎴 SCREEN 0: Live Search & Scanner Entry Layout (Large Readable Text)
     # =====================================================================
     def init_scan_screen(self):
         page = QWidget()
@@ -99,13 +98,13 @@ class DispenseMedicationPage(QWidget):
 
         header_layout = QHBoxLayout()
         title = QLabel("📦 Dispense Medication Workspace")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #4F46E5; border: none;")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #4F46E5; border: none;")
 
         back_btn = QPushButton("⬅️ Menu")
         back_btn.setCursor(QCursor(Qt.PointingHandCursor))
         back_btn.setStyleSheet("""
             QPushButton {
-                padding: 6px 14px; font-size: 12px; background-color: #F1F5F9; border-radius: 6px; 
+                padding: 6px 14px; font-size: 13px; background-color: #F1F5F9; border-radius: 6px; 
                 font-weight: bold; color: #475569; border: 1px solid #E2E8F0;
             }
             QPushButton:hover { background-color: #E2E8F0; }
@@ -119,13 +118,13 @@ class DispenseMedicationPage(QWidget):
 
         search_type_layout = QHBoxLayout()
         lbl = QLabel("Filter Criteria:")
-        lbl.setStyleSheet("font-size: 12px; font-weight: 600; color: #475569;")
+        lbl.setStyleSheet("font-size: 14px; font-weight: 600; color: #475569;")
         search_type_layout.addWidget(lbl)
 
         self.search_type_combo = QComboBox()
         self.search_type_combo.addItems(["Barcode", "Medicine Name", "Active Ingredient", "Batch ID"])
         self.search_type_combo.setStyleSheet("""
-            QComboBox { padding: 6px 10px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 12px; background-color: #FFFFFF; color: #1E293B; min-width: 140px; }
+            QComboBox { padding: 8px 12px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 14px; background-color: #FFFFFF; color: #1E293B; min-width: 150px; }
         """)
         self.search_type_combo.currentIndexChanged.connect(self.run_live_filter)
         search_type_layout.addWidget(self.search_type_combo)
@@ -134,7 +133,7 @@ class DispenseMedicationPage(QWidget):
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Scan barcode identity or type to live query search...")
-        self.search_input.setStyleSheet("padding: 8px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 12px;")
+        self.search_input.setStyleSheet("padding: 10px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 14px;")
         self.search_input.textChanged.connect(self.run_live_filter)
         self.search_input.returnPressed.connect(self.handle_scanner_return_pressed)
 
@@ -147,11 +146,20 @@ class DispenseMedicationPage(QWidget):
         self.live_matches_list.setHorizontalHeaderLabels(["Medication Name", "Strength", "Barcode"])
         self.live_matches_list.setSelectionBehavior(QTableWidget.SelectRows)
         self.live_matches_list.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        self.live_matches_list.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.live_matches_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.live_matches_list.setVerticalScrollMode(QTableWidget.ScrollPerPixel)
+
         self.live_matches_list.setStyleSheet("""
-            QTableWidget { border: 1px solid #E2E8F0; border-radius: 8px; background: #F8FAFC; font-size: 12px; }
-            QHeaderView::section { background-color: #F1F5F9; font-weight: bold; color: #475569; border: none; padding: 6px; }
+            QTableWidget { border: 1px solid #E2E8F0; border-radius: 8px; background: #F8FAFC; font-size: 14px; }
+            QHeaderView::section { background-color: #F1F5F9; font-weight: bold; color: #475569; border: none; padding: 8px; font-size: 14px; }
+            QScrollBar:vertical { border: none; background: #F1F5F9; width: 12px; margin: 0px; border-radius: 6px; }
+            QScrollBar::handle:vertical { background: #CBD5E1; min-height: 30px; border-radius: 6px; }
+            QScrollBar::handle:vertical:hover { background: #94A3B8; }
         """)
         self.live_matches_list.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.live_matches_list.verticalHeader().setDefaultSectionSize(36)
         self.live_matches_list.itemClicked.connect(self.handle_table_row_selection)
         left_layout.addWidget(self.live_matches_list)
 
@@ -165,7 +173,7 @@ class DispenseMedicationPage(QWidget):
         kb_layout.setSpacing(5)
 
         title_kb = QLabel("⌨️ Touch Workspace Keyboard")
-        title_kb.setStyleSheet("font-size: 11px; color: #64748B; font-weight: bold; border: none; margin-bottom: 2px;")
+        title_kb.setStyleSheet("font-size: 12px; color: #64748B; font-weight: bold; border: none; margin-bottom: 2px;")
         kb_layout.addWidget(title_kb)
 
         rows = [
@@ -184,14 +192,14 @@ class DispenseMedicationPage(QWidget):
 
                 if key in ['Clear', '⌫', '🔽']:
                     btn.setStyleSheet(
-                        "background-color: #CBD5E1; color: #1E293B; font-weight: bold; font-size: 12px; border-radius: 6px; border: none;")
+                        "background-color: #CBD5E1; color: #1E293B; font-weight: bold; font-size: 13px; border-radius: 6px; border: none;")
                 elif key == ' ':
                     btn.setText("Space")
                     btn.setStyleSheet(
-                        "background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 12px; border: 1px solid #CBD5E1; border-radius: 6px; min-width: 60px;")
+                        "background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 13px; border: 1px solid #CBD5E1; border-radius: 6px; min-width: 60px;")
                 else:
                     btn.setStyleSheet(
-                        "background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 12px; border: 1px solid #CBD5E1; border-radius: 6px;")
+                        "background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 13px; border: 1px solid #CBD5E1; border-radius: 6px;")
                 btn.clicked.connect(lambda checked, k=key: self.handle_key_press(k))
                 r_lay.addWidget(btn)
             kb_layout.addLayout(r_lay)
@@ -202,7 +210,7 @@ class DispenseMedicationPage(QWidget):
         self.internal_stack.addWidget(page)
 
     # =====================================================================
-    # 🎴 SCREEN 1: Grid Table Selection Board
+    # 🎴 SCREEN 1: Grid Table Selection Board (Large Readable Text)
     # =====================================================================
     def init_selection_screen(self):
         page = QWidget()
@@ -219,11 +227,11 @@ class DispenseMedicationPage(QWidget):
         form_layout.setSpacing(8)
 
         self.med_name_title = QLabel("Medicine Name: Loading...")
-        self.med_name_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #4F46E5;")
+        self.med_name_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #4F46E5;")
         form_layout.addWidget(self.med_name_title)
 
         self.total_stock_lbl = QLabel("Total Inventory Count: --")
-        self.total_stock_lbl.setStyleSheet("font-size: 12px; font-weight: bold; color: #2563EB;")
+        self.total_stock_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #2563EB;")
         form_layout.addWidget(self.total_stock_lbl)
 
         self.batch_table = QTableWidget()
@@ -231,19 +239,28 @@ class DispenseMedicationPage(QWidget):
         self.batch_table.setHorizontalHeaderLabels(["Select", "Batch ID", "Expiry Date", "Stock Qty", "Status"])
         self.batch_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.batch_table.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        self.batch_table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.batch_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.batch_table.setVerticalScrollMode(QTableWidget.ScrollPerPixel)
+
         self.batch_table.setStyleSheet("""
-            QTableWidget { border: 1px solid #E2E8F0; border-radius: 8px; font-size: 11px; background-color: #FFFFFF; }
-            QHeaderView::section { background-color: #F8FAFC; font-weight: bold; padding: 5px; color: #475569; }
+            QTableWidget { border: 1px solid #E2E8F0; border-radius: 8px; font-size: 14px; background-color: #FFFFFF; }
+            QHeaderView::section { background-color: #F8FAFC; font-weight: bold; padding: 6px; color: #475569; font-size: 14px; }
+            QScrollBar:vertical { border: none; background: #F1F5F9; width: 12px; margin: 0px; border-radius: 6px; }
+            QScrollBar::handle:vertical { background: #CBD5E1; min-height: 30px; border-radius: 6px; }
+            QScrollBar::handle:vertical:hover { background: #94A3B8; }
         """)
         self.batch_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.batch_table.verticalHeader().setDefaultSectionSize(36)
         form_layout.addWidget(self.batch_table)
 
         form_layout.addWidget(
-            QLabel("Required Pills / Dosage Count:", styleSheet="font-size: 11px; font-weight: bold; color: #475569;"))
+            QLabel("Required Pills / Dosage Count:", styleSheet="font-size: 13px; font-weight: bold; color: #475569;"))
         self.quantity_input = QLineEdit()
         self.quantity_input.setPlaceholderText("Type pill count to dispense...")
         self.quantity_input.setStyleSheet(
-            "padding: 8px; font-size: 12px; border: 1px solid #CBD5E1; border-radius: 6px;")
+            "padding: 10px; font-size: 14px; border: 1px solid #CBD5E1; border-radius: 6px; background-color: #F8FAFC;")
         self.quantity_input.focusInEvent = lambda event: self.handle_input_focus(self.quantity_input, event)
         self.quantity_input.installEventFilter(self)
         form_layout.addWidget(self.quantity_input)
@@ -251,7 +268,7 @@ class DispenseMedicationPage(QWidget):
         self.dispense_btn = QPushButton("⚡ Confirm & Run Hybrid FIFO Allocation")
         self.dispense_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.dispense_btn.setStyleSheet("""
-            QPushButton { background-color: #10B981; color: white; padding: 10px; font-weight: bold; border-radius: 6px; border: none; font-size: 13px; }
+            QPushButton { background-color: #10B981; color: white; padding: 12px; font-weight: bold; border-radius: 6px; border: none; font-size: 14px; }
             QPushButton:hover { background-color: #059669; }
         """)
         self.dispense_btn.clicked.connect(self.execute_smart_dispense)
@@ -261,13 +278,13 @@ class DispenseMedicationPage(QWidget):
         another_btn = QPushButton("🔄 Scan New Identity")
         another_btn.setCursor(QCursor(Qt.PointingHandCursor))
         another_btn.setStyleSheet(
-            "background-color: #F1F5F9; color: #475569; padding: 8px; font-size: 12px; font-weight: bold; border-radius: 6px; border: 1px solid #E2E8F0;")
+            "background-color: #F1F5F9; color: #475569; padding: 10px; font-size: 13px; font-weight: bold; border-radius: 6px; border: 1px solid #E2E8F0;")
         another_btn.clicked.connect(lambda: self.internal_stack.setCurrentIndex(0))
 
         finish_btn = QPushButton("🏁 Complete")
         finish_btn.setCursor(QCursor(Qt.PointingHandCursor))
         finish_btn.setStyleSheet(
-            "background-color: #4F46E5; color: white; padding: 8px; font-size: 12px; font-weight: bold; border-radius: 6px; border: none;")
+            "background-color: #4F46E5; color: white; padding: 10px; font-size: 13px; font-weight: bold; border-radius: 6px; border: none;")
         finish_btn.clicked.connect(self.clear_page)
         finish_btn.clicked.connect(self.on_back_to_menu)
 
@@ -284,7 +301,7 @@ class DispenseMedicationPage(QWidget):
         kb_lay2.setContentsMargins(10, 10, 10, 10)
 
         title_kb2 = QLabel("🧮 Numerical Pad")
-        title_kb2.setStyleSheet("font-size: 11px; color: #64748B; font-weight: bold; border: none; margin-bottom: 4px;")
+        title_kb2.setStyleSheet("font-size: 12px; color: #64748B; font-weight: bold; border: none; margin-bottom: 4px;")
         kb_lay2.addWidget(title_kb2)
 
         num_grid2 = QVBoxLayout()
@@ -300,10 +317,10 @@ class DispenseMedicationPage(QWidget):
 
                 if key in ['Clear', '⌫', '🔽']:
                     btn.setStyleSheet(
-                        "background-color: #CBD5E1; color: #1E293B; font-weight: bold; font-size: 12px; border-radius: 6px; border: none;")
+                        "background-color: #CBD5E1; color: #1E293B; font-weight: bold; font-size: 13px; border-radius: 6px; border: none;")
                 else:
                     btn.setStyleSheet(
-                        "background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 13px; border: 1px solid #CBD5E1; border-radius: 6px;")
+                        "background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 14px; border: 1px solid #CBD5E1; border-radius: 6px;")
                 btn.clicked.connect(lambda checked, k=key: self.handle_key_press(k))
                 rl.addWidget(btn)
             num_grid2.addLayout(rl)
@@ -320,11 +337,11 @@ class DispenseMedicationPage(QWidget):
     def handle_input_focus(self, input_field, event):
         for box in [self.search_input, self.quantity_input]:
             box.setStyleSheet(
-                "padding: 8px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 12px; background-color: #F8FAFC; color: #1E293B;")
+                "padding: 10px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 14px; background-color: #F8FAFC; color: #1E293B;")
         self.current_focused_input = input_field
         if event: super(QLineEdit, input_field).focusInEvent(event)
         input_field.setStyleSheet(
-            "padding: 8px; border: 2px solid #6366F1; border-radius: 6px; font-size: 12px; background-color: #F5F3FF; color: #0F172A; font-weight: bold;")
+            "padding: 10px; border: 2px solid #6366F1; border-radius: 6px; font-size: 14px; background-color: #F5F3FF; color: #0F172A; font-weight: bold;")
 
     def eventFilter(self, obj, event):
         if event.type() in [QEvent.MouseButtonPress, QEvent.MouseButtonRelease]:
@@ -380,11 +397,9 @@ class DispenseMedicationPage(QWidget):
         for med in matched_items:
             clean_b = med['barcode']
 
-            # 🔥 Fix: Extract clean value if the barcode comes wrapped as a dictionary string or object
             if isinstance(clean_b, dict):
                 clean_b = clean_b.get('text', '')
             elif str(clean_b).startswith("{'text':"):
-                # Fallback string parsing just in case it's treated as raw unparsed text
                 try:
                     import ast
                     parsed_dict = ast.literal_eval(str(clean_b))
@@ -398,7 +413,7 @@ class DispenseMedicationPage(QWidget):
 
                 name_item = QTableWidgetItem(med["name"])
                 dosage_item = QTableWidgetItem(med["dosage"])
-                barcode_item = QTableWidgetItem(str(clean_b))  # Safely renders clean digits
+                barcode_item = QTableWidgetItem(str(clean_b))
 
                 name_item.setData(Qt.UserRole, clean_b)
 
@@ -436,7 +451,6 @@ class DispenseMedicationPage(QWidget):
         try:
             self.loaded_batches = airtable_api.find_all_batches_by_barcode(barcode)
 
-            # Local fallback synchronization
             if not self.loaded_batches and self.all_cached_inventory:
                 for item in self.all_cached_inventory:
                     if item['barcode'] == barcode:
@@ -496,7 +510,6 @@ class DispenseMedicationPage(QWidget):
             requested_qty = int(qty_str)
             if requested_qty <= 0: return
 
-            # 1. Gather batches explicitly checked by user
             selected_batches = []
             for row in range(self.batch_table.rowCount()):
                 chk_widget = self.batch_table.cellWidget(row, 0)
@@ -506,11 +519,9 @@ class DispenseMedicationPage(QWidget):
                         batch_data = self.batch_table.item(row, 1).data(Qt.UserRole)
                         selected_batches.append(batch_data)
 
-            # 2. Determine target calculation workspace pool
             is_explicit_mode = len(selected_batches) > 0
             pool_to_calculate = selected_batches if is_explicit_mode else self.loaded_batches
 
-            # Run safety capacity check on the focused pool
             total_available_in_pool = sum(int(b["current_quantity"]) for b in pool_to_calculate)
             if requested_qty > total_available_in_pool:
                 pool_name = "the selected boxes" if is_explicit_mode else "total active stock"
@@ -518,10 +529,8 @@ class DispenseMedicationPage(QWidget):
                                      f"Requested {requested_qty} pills, but {pool_name} only contains {total_available_in_pool} available!")
                 return
 
-            # Enforce strict timestamp sorting for perfect FIFO execution
             pool_to_calculate.sort(key=lambda x: x["expiry_date"])
 
-            # 3. Simulate FIFO depletion matrix mapping
             remaining_to_deduct = requested_qty
             allocation_report = []
             execution_plan = []
@@ -538,23 +547,19 @@ class DispenseMedicationPage(QWidget):
                     pills_to_draw = current_qty
                     remaining_to_deduct -= current_qty
 
-                # 🔥 Formats strategy report by Expiry Date to be intuitive for staff
                 allocation_report.append(f"• Expiry [ {batch['expiry_date']} ] : Take exactly {pills_to_draw} pills.")
                 execution_plan.append({"id": batch["id"], "old_qty": current_qty, "drawn": pills_to_draw})
 
-            # 4. Display confirmation visualization dialog report
             report_msg = "🎯 Medication Allocation Draw Strategy:\n\n" + "\n".join(allocation_report)
             confirm = QMessageBox.question(self, "Confirm Secure Allocation Draw ⚡",
                                            report_msg + "\n\nDo you authorize this cloud inventory deduction?",
                                            QMessageBox.Yes | QMessageBox.No)
             if confirm != QMessageBox.Yes: return
 
-            # 5. Commit mutations live to cloud database
             for plan in execution_plan:
                 new_qty = plan["old_qty"] - plan["drawn"]
                 airtable_api.update_medication_quantity(plan["id"], new_qty)
 
-            # Log transaction footprint securely
             log_note = "Explicit Batch Multi-Select Draw" if is_explicit_mode else "Full-pool Automatic FIFO Draw"
             airtable_api.log_transaction("DISPENSE", self.scanned_barcode, self.user_full_name, requested_qty, log_note)
 

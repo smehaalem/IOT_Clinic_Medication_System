@@ -6,7 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFrame, QListWidget, QListWidgetItem, QComboBox
+    QPushButton, QFrame, QTableWidget, QTableWidgetItem, QComboBox, QHeaderView, QStackedWidget
 )
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QCursor
@@ -15,8 +15,8 @@ import airtable_api
 
 class InventoryViewPage(QWidget):
     """
-    Modern Inventory Browser with dynamic live filtering and touch keyboard.
-    ⚠️ UPDATED: Supports Airtable Barcode Lookup fields and optimized Touch Layout.
+    Modern Clinic Inventory Browser using a clean multi-screen Stacked UI.
+    Optimized with custom Scrollbars and large readable fonts for clear visibility.
     """
 
     def __init__(self, parent=None, on_back_to_menu=None):
@@ -25,37 +25,54 @@ class InventoryViewPage(QWidget):
         self.current_focused_input = None
         self.all_cached_inventory = []
 
-        self.init_ui()
+        # Internal stack configuration to separate overview and detail screens
+        self.internal_stack = QStackedWidget(self)
 
-    def init_ui(self):
-        self.setStyleSheet("""
+        self.init_directory_screen()  # Index 0
+        self.init_details_screen()  # Index 1
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(self.internal_stack)
+
+        self.internal_stack.setCurrentIndex(0)
+
+        # 🔥 Trigger immediate database data sync upon workspace initialization
+        self.refresh_inventory_data()
+
+    # =====================================================================
+    # 🎴 SCREEN 0: Full Width Main Directory Screen (With Scroll & Large Text)
+    # =====================================================================
+    def init_directory_screen(self):
+        page = QWidget()
+        page.setStyleSheet("""
             QWidget { background-color: #F8FAFC; font-family: 'Segoe UI'; color: #334155; }
-            QLabel { font-size: 12px; font-weight: 500; color: #475569; }
+            QLabel { font-size: 14px; font-weight: 600; color: #475569; }
             QLineEdit, QComboBox { 
-                padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; 
-                font-size: 11px; background-color: #FFFFFF; color: #0F172A;
+                padding: 8px; border: 1px solid #CBD5E1; border-radius: 6px; 
+                font-size: 14px; background-color: #FFFFFF; color: #0F172A;
             }
         """)
 
-        main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.setSpacing(10)
+        layout = QHBoxLayout(page)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(12)
 
         left_card = QFrame()
         left_card.setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;")
         left_layout = QVBoxLayout(left_card)
-        left_layout.setContentsMargins(12, 12, 12, 12)
-        left_layout.setSpacing(6)
+        left_layout.setContentsMargins(15, 15, 15, 15)
+        left_layout.setSpacing(8)
 
         header_layout = QHBoxLayout()
-        title = QLabel("📋 View Clinic Inventory")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #4F46E5; border: none;")
+        title = QLabel("📋 Clinic Stock Directory")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #4F46E5; border: none;")
 
         back_btn = QPushButton("⬅️ Menu")
         back_btn.setCursor(QCursor(Qt.PointingHandCursor))
         back_btn.setStyleSheet("""
             QPushButton {
-                padding: 4px 10px; font-size: 11px; background-color: #F1F5F9; border-radius: 6px; 
+                padding: 6px 14px; font-size: 13px; background-color: #F1F5F9; border-radius: 6px; 
                 font-weight: bold; color: #475569; border: 1px solid #E2E8F0;
             }
             QPushButton:hover { background-color: #E2E8F0; }
@@ -69,43 +86,68 @@ class InventoryViewPage(QWidget):
         left_layout.addLayout(header_layout)
 
         search_filter_layout = QHBoxLayout()
-        search_filter_layout.addWidget(QLabel("Search:"))
+        search_filter_layout.addWidget(QLabel("Search Criteria:"))
         self.search_type_combo = QComboBox()
-        self.search_type_combo.addItems(["Barcode", "Medicine Name", "Active Ingredient", "Batch ID"])
-        self.search_type_combo.setStyleSheet("min-width: 120px; padding: 4px; font-size: 11px;")
+        self.search_type_combo.addItems(["Medicine Name", "Category / Use", "Barcode", "Active Ingredient"])
+        self.search_type_combo.setStyleSheet("min-width: 150px; padding: 4px; font-size: 14px;")
         self.search_type_combo.currentIndexChanged.connect(self.run_live_filter)
         search_filter_layout.addWidget(self.search_type_combo)
         search_filter_layout.addStretch()
         left_layout.addLayout(search_filter_layout)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Scan barcode or type to filter...")
-        self.search_input.setStyleSheet("padding: 8px; font-size: 12px;")
+        self.search_input.setPlaceholderText("Scan barcode or type a keyword to search stock directory...")
+        self.search_input.setStyleSheet("padding: 10px; font-size: 14px;")
         self.search_input.textChanged.connect(self.run_live_filter)
-        self.search_input.returnPressed.connect(self.run_live_filter)
 
         self.search_input.focusInEvent = lambda event: self.handle_input_focus(self.search_input, event)
         self.search_input.installEventFilter(self)
         left_layout.addWidget(self.search_input)
 
-        self.inventory_list_widget = QListWidget()
-        self.inventory_list_widget.setStyleSheet("""
-            QListWidget { border: 1px solid #E2E8F0; border-radius: 6px; background: #F8FAFC; font-size: 11px; }
-            QListWidget::item { padding: 6px; border-bottom: 1px solid #F1F5F9; color: #1E293B; }
+        # Full width master layout configuration with Scrollbars activated
+        self.master_table = QTableWidget()
+        self.master_table.setColumnCount(4)
+        self.master_table.setHorizontalHeaderLabels(
+            ["Medicine Name", "Category / Use", "Strength", "Total Available Qty"])
+        self.master_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.master_table.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        self.master_table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.master_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.master_table.setVerticalScrollMode(QTableWidget.ScrollPerPixel)
+
+        self.master_table.setStyleSheet("""
+            QTableWidget { border: 1px solid #E2E8F0; border-radius: 8px; background: #F8FAFC; font-size: 14px; }
+            QHeaderView::section { background-color: #F1F5F9; font-weight: bold; color: #475569; border: none; padding: 8px; font-size: 14px; }
+            QScrollBar:vertical {
+                border: none; background: #F1F5F9; width: 12px; margin: 0px; border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: #CBD5E1; min-height: 30px; border-radius: 6px;
+            }
+            QScrollBar::handle:vertical:hover { background: #94A3B8; }
         """)
-        left_layout.addWidget(self.inventory_list_widget)
 
-        main_layout.addWidget(left_card, stretch=5)
+        master_header = self.master_table.horizontalHeader()
+        master_header.setSectionResizeMode(0, QHeaderView.Stretch)
+        master_header.setSectionResizeMode(1, QHeaderView.Stretch)
+        master_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        master_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.master_table.verticalHeader().setDefaultSectionSize(36)
 
-        # ⌨️ كيبورد اللمس المطور والمحمي من السحق عمودياً لشاشات الرازبري
+        self.master_table.itemClicked.connect(self.handle_master_row_selection)
+        left_layout.addWidget(self.master_table)
+        layout.addWidget(left_card, stretch=6)
+
+        # ⌨️ Integrated Virtual Keyboard Section
         self.kb_card = QFrame()
-        self.kb_card.setStyleSheet("background-color: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0;")
+        self.kb_card.setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;")
         kb_layout = QVBoxLayout(self.kb_card)
         kb_layout.setContentsMargins(8, 8, 8, 8)
         kb_layout.setSpacing(4)
 
-        title_kb = QLabel("⌨️ Touch Workspace Keyboard")
-        title_kb.setStyleSheet("font-size: 11px; color: #64748B; font-weight: bold; border: none; margin-bottom: 2px;")
+        title_kb = QLabel("⌨️ Touch Keyboard Workspace")
+        title_kb.setStyleSheet("font-size: 12px; color: #64748B; font-weight: bold; border: none; margin-bottom: 2px;")
         kb_layout.addWidget(title_kb)
 
         keyboard_widget = QWidget()
@@ -125,24 +167,22 @@ class InventoryViewPage(QWidget):
             for key in row:
                 btn = QPushButton(key)
                 btn.setFocusPolicy(Qt.NoFocus)
-
-                # 🔥 تمديد الارتفاع عمودياً لراحة إصبع الطبيب أو الممرض ومنع حشر الأزرار
                 btn.setMinimumHeight(42)
 
                 if key in ['Clear', '⌫', '🔽 Hide']:
                     btn.setStyleSheet("""
-                        QPushButton { background-color: #CBD5E1; color: #1E293B; font-weight: bold; font-size: 11px; border-radius: 5px; border: none; padding: 6px 0px; }
+                        QPushButton { background-color: #CBD5E1; color: #1E293B; font-weight: bold; font-size: 12px; border-radius: 5px; border: none; }
                         QPushButton:pressed { background-color: #94A3B8; }
                     """)
                 elif key == ' ':
                     btn.setText("Space")
                     btn.setStyleSheet("""
-                        QPushButton { background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 11px; border: 1px solid #CBD5E1; border-radius: 5px; min-width: 55px; padding: 6px 0px; }
+                        QPushButton { background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 12px; border: 1px solid #CBD5E1; border-radius: 5px; min-width: 55px; }
                         QPushButton:pressed { background-color: #E2E8F0; }
                     """)
                 else:
                     btn.setStyleSheet("""
-                        QPushButton { background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 11px; border: 1px solid #CBD5E1; border-radius: 5px; padding: 6px 0px; }
+                        QPushButton { background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 12px; border: 1px solid #CBD5E1; border-radius: 5px; }
                         QPushButton:pressed { background-color: #E2E8F0; }
                     """)
                 btn.clicked.connect(lambda checked, k=key: self.handle_key_press(k))
@@ -151,72 +191,205 @@ class InventoryViewPage(QWidget):
 
         kb_layout.addLayout(keyboard_lay)
         kb_layout.addStretch()
-
-        main_layout.addWidget(self.kb_card, stretch=5)
+        layout.addWidget(self.kb_card, stretch=4)
 
         self.kb_card.hide()
+        self.internal_stack.addWidget(page)
 
-        self.current_focused_input = self.search_input
-        self.search_input.setFocus()
+    # =====================================================================
+    # 🎴 SCREEN 1: Full Width Detailed Batches Breakdown Screen
+    # =====================================================================
+    def init_details_screen(self):
+        page = QWidget()
+        page.setStyleSheet("""
+            QWidget { background-color: #F8FAFC; font-family: 'Segoe UI'; color: #334155; }
+            QLabel { font-size: 14px; font-weight: 600; color: #475569; }
+        """)
 
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        detail_card = QFrame()
+        detail_card.setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;")
+        detail_layout = QVBoxLayout(detail_card)
+        detail_layout.setContentsMargins(15, 15, 15, 15)
+        detail_layout.setSpacing(8)
+
+        header_layout = QHBoxLayout()
+        self.detail_title = QLabel("Medicine Batches Breakdown")
+        self.detail_title.setStyleSheet("font-size: 18px; font-weight: bold; color: #4F46E5; border: none;")
+
+        back_to_dir_btn = QPushButton("⬅️ Back to Directory")
+        back_to_dir_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        back_to_dir_btn.setStyleSheet("""
+            QPushButton {
+                padding: 8px 16px; font-size: 13px; background-color: #4F46E5; border-radius: 6px; 
+                font-weight: bold; color: white; border: none;
+            }
+            QPushButton:hover { background-color: #4338CA; }
+        """)
+        back_to_dir_btn.clicked.connect(lambda: self.internal_stack.setCurrentIndex(0))
+
+        header_layout.addWidget(self.detail_title)
+        header_layout.addStretch()
+        header_layout.addWidget(back_to_dir_btn)
+        detail_layout.addLayout(header_layout)
+
+        self.detail_desc = QLabel("")
+        self.detail_desc.setStyleSheet("font-size: 14px; color: #64748B; margin-bottom: 4px;")
+        detail_layout.addWidget(self.detail_desc)
+
+        self.detail_table = QTableWidget()
+        self.detail_table.setColumnCount(3)
+        self.detail_table.setHorizontalHeaderLabels(["Batch Code", "Expiry Date", "Current Pills Count"])
+        self.detail_table.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        self.detail_table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.detail_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.detail_table.setVerticalScrollMode(QTableWidget.ScrollPerPixel)
+
+        self.detail_table.setStyleSheet("""
+            QTableWidget { border: 1px solid #E2E8F0; border-radius: 8px; background: #F8FAFC; font-size: 14px; }
+            QHeaderView::section { background-color: #F1F5F9; font-weight: bold; color: #475569; border: none; padding: 8px; font-size: 14px; }
+            QScrollBar:vertical {
+                border: none; background: #F1F5F9; width: 12px; margin: 0px; border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: #CBD5E1; min-height: 30px; border-radius: 6px;
+            }
+            QScrollBar::handle:vertical:hover { background: #94A3B8; }
+        """)
+        self.detail_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.detail_table.verticalHeader().setDefaultSectionSize(36)
+        detail_layout.addWidget(self.detail_table)
+
+        layout.addWidget(detail_card)
+        self.internal_stack.addWidget(page)
+
+    # =====================================================================
+    # ⚙️ INTERACTIVE LAYOUT HANDLING LOGIC & MUTATIONS
+    # =====================================================================
     def refresh_inventory_data(self):
-        """ جلب البيانات وترتيبها تلقائياً مع تفكيك حقل الباركود اللوك أب الجديد """
-        self.inventory_list_widget.clear()
+        """ Downloads latest stock records maps while normalizing lookups cleanly """
+        self.master_table.setRowCount(0)
         self.all_cached_inventory = []
+
         try:
             if not hasattr(airtable_api, 'stock_table') or airtable_api.stock_table is None: return
             records = airtable_api.stock_table.all()
 
             for r in records:
                 fields = r.fields if hasattr(r, 'fields') else r.get('fields', {})
-                qty = int(fields.get("Current Pills Count", 0))
-                if qty > 0:
-                    # 🔥 معالجة جلب الباركود النظيف من حقل الـ Lookup الجديد كلياً لمنع المشاكل
-                    raw_b = fields.get("Barcode lookup") or fields.get("Barcode", "")
+
+                # 🔥 إصلاح مرن وقوي: جلب القيمة الرقمية للكمية بفحص الأسماء المحتملة في السيرفر لضمان قراءة الجدول كاملاً
+                qty_raw = fields.get("Current Pills Count") or fields.get("Quantity") or fields.get("Pills Count") or 0
+
+                # إذا كانت كمية الدواء فارغة أو نصية من صيغ الإدخال الأخرى
+                try:
+                    qty = int(float(qty_raw))
+                except (ValueError, TypeError):
+                    qty = 0
+
+                # نعرض الدواء طالما الاسم موجود، حتى لو كانت الكمية صفرية في بعض الدفعات التاريخية لضمان اكتمال السجلات
+                if fields.get("Medicine Name"):
+                    raw_b = fields.get("Barcode lookup") or fields.get("Barcode", "NO_BARCODE")
                     if isinstance(raw_b, list):
-                        clean_b = str(raw_b[0]).strip() if raw_b else ""
+                        clean_b = str(raw_b[0]).strip() if raw_b else "NO_BARCODE"
                     else:
                         clean_b = str(raw_b).strip()
+
+                    # استخراج فئة الاستخدام بدقة ومطابقتها مع الحقل الظاهر في السيرفر
+                    category_val = fields.get("Category") or fields.get("Category / Use") or "General Medicine"
+                    if isinstance(category_val, list): category_val = category_val[0]
 
                     self.all_cached_inventory.append({
                         "name": fields.get("Medicine Name", "Unknown"),
                         "barcode": clean_b,
+                        "category": category_val,
                         "ingredient": fields.get("Active Ingredient", ""),
-                        "dosage": fields.get("Dosage", ""),
+                        "dosage": fields.get("Dosage", "N/A"),
                         "qty": qty,
-                        "batch": fields.get("A Batch", "N/A"),
+                        "batch": fields.get("A Batch") or fields.get("Batch Number") or "N/A",
                         "expiry": fields.get("Expiry Date", "9999-12-31")
                     })
 
-            # ترتيب البيانات من الأقرب صلاحية إلى الأبعد
             self.all_cached_inventory.sort(key=lambda x: x['expiry'])
 
-            self.show_items_in_list(self.all_cached_inventory)
+            # 🔥 جلب وعرض البيانات فوراً بالوضع الافتراضي عند فتح الصفحة
+            self.show_items_in_grid(self.all_cached_inventory)
         except Exception as e:
-            print(f"Error loading inventory screen: {e}")
+            print(f"Error executing inventory matrix refresh: {e}")
 
-    def show_items_in_list(self, items_list):
-        self.inventory_list_widget.clear()
-        for med in items_list:
-            # هنا الباركود جاهز ومنظف كنص صريح مباشر
-            display_text = f"📅 [{med['expiry']}] | 💊 {med['name']} ({med['dosage']}) | Code: {med['barcode']} | Batch: {med['batch']} | Qty: {med['qty']}"
-            self.inventory_list_widget.addItem(QListWidgetItem(display_text))
+    def show_items_in_grid(self, items_list):
+        """ Groups inventory rows smoothly into full width table headers """
+        self.master_table.setRowCount(0)
+
+        grouped_inventory = {}
+        for item in items_list:
+            # نجمع الأدوية المتطابقة بالاسم أو الباركود لمنع التكرار بصرياً في الواجهة الرئيسية
+            key = item["name"].lower()
+            if key not in grouped_inventory:
+                grouped_inventory[key] = {
+                    "name": item["name"],
+                    "category": item["category"],
+                    "dosage": item["dosage"],
+                    "total_qty": 0,
+                    "batches": []
+                }
+            grouped_inventory[key]["total_qty"] += item["qty"]
+            grouped_inventory[key]["batches"].append(item)
+
+        for idx, (k, data) in enumerate(grouped_inventory.items()):
+            self.master_table.insertRow(idx)
+
+            name_item = QTableWidgetItem(data["name"])
+            category_item = QTableWidgetItem(data["category"])
+            dosage_item = QTableWidgetItem(str(data["dosage"]))
+            qty_item = QTableWidgetItem(str(data["total_qty"]))
+
+            name_item.setData(Qt.UserRole, data["batches"])
+
+            self.master_table.setItem(idx, 0, name_item)
+            self.master_table.setItem(idx, 1, category_item)
+            self.master_table.setItem(idx, 2, dosage_item)
+            self.master_table.setItem(idx, 3, qty_item)
+
+    def handle_master_row_selection(self, item):
+        """ Routes selection tracking to full width breakdown dashboard index """
+        row = item.row()
+        name_cell = self.master_table.item(row, 0)
+        batches = name_cell.data(Qt.UserRole)
+
+        if not batches: return
+
+        self.kb_card.hide()
+
+        self.detail_title.setText(f"📋 Batches Breakdown: {batches[0]['name']}")
+        self.detail_desc.setText(
+            f"Detailed overview of separate batches currently in storage for this medicine selection.")
+        self.detail_table.setRowCount(0)
+
+        for idx, b in enumerate(batches):
+            self.detail_table.insertRow(idx)
+            self.detail_table.setItem(idx, 0, QTableWidgetItem(str(b["batch"])))
+            self.detail_table.setItem(idx, 1, QTableWidgetItem(str(b["expiry"])))
+            self.detail_table.setItem(idx, 2, QTableWidgetItem(str(b["qty"])))
+
+        self.internal_stack.setCurrentIndex(1)
 
     def handle_input_focus(self, input_field, event):
         self.current_focused_input = input_field
-        if event:
-            super(QLineEdit, input_field).focusInEvent(event)
+        if event: super(QLineEdit, input_field).focusInEvent(event)
         input_field.setStyleSheet(
-            "padding: 8px; border: 2px solid #6366F1; border-radius: 6px; font-size: 12px; background-color: #F5F3FF; color: #0F172A; font-weight: bold;")
+            "padding: 10px; border: 2px solid #6366F1; border-radius: 6px; font-size: 14px; background-color: #F5F3FF; color: #0F172A; font-weight: bold;")
         input_field.setFocus(Qt.OtherFocusReason)
 
     def eventFilter(self, obj, event):
-        s_input = getattr(self, 'search_input', None)
-        if obj == s_input and s_input is not None:
-            if event.type() in [QEvent.MouseButtonPress, QEvent.MouseButtonRelease]:
-                self.kb_card.show()
-                s_input.setStyleSheet(
-                    "padding: 8px; border: 2px solid #6366F1; border-radius: 6px; font-size: 12px; background-color: #F5F3FF; color: #0F172A; font-weight: bold;")
+        if obj == self.search_input and event.type() in [QEvent.MouseButtonPress, QEvent.MouseButtonRelease]:
+            self.kb_card.show()
+            self.search_input.setStyleSheet(
+                "padding: 10px; border: 2px solid #6366F1; border-radius: 6px; font-size: 14px; background-color: #F5F3FF; color: #0F172A; font-weight: bold;")
         return super().eventFilter(obj, event)
 
     def handle_key_press(self, key):
@@ -226,7 +399,7 @@ class InventoryViewPage(QWidget):
         if key == '🔽 Hide':
             self.kb_card.hide()
             self.search_input.setStyleSheet(
-                "padding: 8px; font-size: 12px; background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 6px;")
+                "padding: 10px; font-size: 14px; background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 6px;")
             return
         elif key == '⌫':
             self.current_focused_input.setText(current_text[:-1])
@@ -234,39 +407,41 @@ class InventoryViewPage(QWidget):
             self.current_focused_input.clear()
         else:
             self.current_focused_input.setText(current_text + key)
-
         self.current_focused_input.setFocus(Qt.OtherFocusReason)
 
     def run_live_filter(self):
+        """ Filters master stock fields tracking variables cleanly """
         search_text = self.search_input.text().strip().lower()
         search_type = self.search_type_combo.currentText()
 
+        # إذا تم مسح مربع البحث، يعود لعرض القائمة كاملة فوراً
         if not search_text:
-            self.show_items_in_list(self.all_cached_inventory)
+            self.show_items_in_grid(self.all_cached_inventory)
             return
 
         filtered = []
         for med in self.all_cached_inventory:
-            field_val = ""
+            val_to_check = ""
             if search_type == "Medicine Name":
                 val_to_check = med["name"]
+            elif search_type == "Category / Use":
+                val_to_check = med["category"]
             elif search_type == "Barcode":
                 val_to_check = med["barcode"]
             elif search_type == "Active Ingredient":
                 val_to_check = med["ingredient"]
-            elif search_type == "Batch ID":
-                val_to_check = med["batch"]
 
-            val_to_check = str(val_to_check).lower()
-            if search_text in val_to_check:
+            if search_text in str(val_to_check).lower():
                 filtered.append(med)
 
-        self.show_items_in_list(filtered)
+        self.show_items_in_grid(filtered)
 
     def clear_page(self):
         self.search_input.clear()
-        self.inventory_list_widget.clear()
-        self.all_cached_inventory = []
+        self.master_table.setRowCount(0)
+        self.detail_table.setRowCount(0)
+        self.refresh_inventory_data()
         self.kb_card.hide()
         self.search_input.setStyleSheet(
-            "padding: 8px; font-size: 12px; background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 6px;")
+            "padding: 10px; font-size: 14px; background-color: #FFFFFF; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 6px;")
+        self.internal_stack.setCurrentIndex(0)

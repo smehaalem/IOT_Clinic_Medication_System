@@ -24,7 +24,6 @@ class StaffFormPage(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        # اللياوت الرئيسي ممتد بالكامل بالعرض
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(15, 15, 15, 15)
         main_layout.setSpacing(15)
@@ -35,9 +34,9 @@ class StaffFormPage(QWidget):
         form_card = QFrame()
         form_card.setStyleSheet("""
             QFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; }
-            QLabel { font-size: 11px; font-weight: 600; color: #475569; border: none; }
-            QLineEdit { padding: 7px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 12px; background-color: #F8FAFC; color: #1E293B; }
-            QComboBox { padding: 7px; border: 1px solid #E2E8F0; border-radius: 6px; background-color: #FFFFFF; font-size: 12px; }
+            QLabel { font-size: 14px; font-weight: 600; color: #475569; border: none; }
+            QLineEdit { padding: 8px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 14px; background-color: #F8FAFC; color: #1E293B; }
+            QComboBox { padding: 8px; border: 1px solid #E2E8F0; border-radius: 6px; background-color: #FFFFFF; font-size: 14px; }
         """)
 
         form_layout = QVBoxLayout(form_card)
@@ -46,7 +45,7 @@ class StaffFormPage(QWidget):
 
         self.form_title = QLabel("➕ Register New Staff Member")
         self.form_title.setStyleSheet(
-            "font-size: 15px; font-weight: bold; color: #6366F1; margin-bottom: 4px; border: none;")
+            "font-size: 18px; font-weight: bold; color: #6366F1; margin-bottom: 4px; border: none;")
         form_layout.addWidget(self.form_title)
 
         form_layout.addWidget(QLabel("Full Name"))
@@ -75,7 +74,6 @@ class StaffFormPage(QWidget):
         self.role_combobox.currentIndexChanged.connect(self.toggle_email_field_visibility)
         form_layout.addWidget(self.role_combobox)
 
-        # حاوية البريد الإلكتروني للمدير
         self.email_container = QWidget()
         self.email_container.setStyleSheet("border: none; background: transparent;")
         email_lay = QVBoxLayout(self.email_container)
@@ -90,18 +88,17 @@ class StaffFormPage(QWidget):
 
         form_layout.addStretch()
 
-        # أزرار التحكم السفلى (تراجع وحفظ)
         btn_layout = QHBoxLayout()
         self.back_btn = QPushButton("⬅️ Back")
         self.back_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.back_btn.setStyleSheet(
-            "background-color: #64748B; color: white; padding: 10px; font-weight: bold; border-radius: 6px; font-size: 12px; border: none;")
+            "background-color: #64748B; color: white; padding: 12px; font-weight: bold; border-radius: 6px; font-size: 14px; border: none;")
         self.back_btn.clicked.connect(self.handle_back_click)
 
         self.submit_btn = QPushButton("💾 Save Account")
         self.submit_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.submit_btn.setStyleSheet(
-            "background-color: #10B981; color: white; padding: 10px; font-weight: bold; border-radius: 6px; font-size: 12px; border: none;")
+            "background-color: #10B981; color: white; padding: 12px; font-weight: bold; border-radius: 6px; font-size: 14px; border: none;")
         self.submit_btn.clicked.connect(self.handle_save)
 
         btn_layout.addWidget(self.back_btn, stretch=1)
@@ -117,7 +114,7 @@ class StaffFormPage(QWidget):
         kb_card.setStyleSheet("""
             QFrame { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; }
             QPushButton { 
-                background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 13px; 
+                background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 15px; 
                 border: 1px solid #CBD5E1; border-radius: 6px; 
             }
             QPushButton:pressed { background-color: #E2E8F0; }
@@ -127,7 +124,7 @@ class StaffFormPage(QWidget):
         kb_layout.setSpacing(5)
 
         title_kb = QLabel("⌨️ Touch Workspace Keyboard")
-        title_kb.setStyleSheet("font-size: 11px; color: #64748B; font-weight: bold; border: none; margin-bottom: 2px;")
+        title_kb.setStyleSheet("font-size: 13px; color: #64748B; font-weight: bold; border: none; margin-bottom: 2px;")
         kb_layout.addWidget(title_kb)
 
         rows = [
@@ -144,16 +141,14 @@ class StaffFormPage(QWidget):
             for key in row:
                 btn = QPushButton(key)
                 btn.setFocusPolicy(Qt.NoFocus)
-
-                # 🔥 الإصلاح المستقر: إعطاء مساحة تمدد مرنة عمودياً دون التسبب بأي AttributeError
                 btn.setMinimumHeight(45)
 
                 if key in ['⌫', 'Clear']:
-                    btn.setStyleSheet("background-color: #CBD5E1; color: #1E293B; border: none; min-width: 55px; padding: 8px 0px;")
+                    btn.setStyleSheet("background-color: #CBD5E1; color: #1E293B; border: none; min-width: 55px; padding: 8px 0px; font-size: 14px;")
                 elif key == 'Space':
-                    btn.setStyleSheet("background-color: #FFFFFF; min-width: 180px; padding: 8px 0px;")
+                    btn.setStyleSheet("background-color: #FFFFFF; min-width: 180px; padding: 8px 0px; font-size: 14px;")
                 else:
-                    btn.setStyleSheet("background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 13px; border: 1px solid #CBD5E1; border-radius: 6px; padding: 8px 0px;")
+                    btn.setStyleSheet("background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 15px; border: 1px solid #CBD5E1; border-radius: 6px; padding: 8px 0px;")
 
                 btn.clicked.connect(lambda checked, k=key: self.handle_key_press(k))
                 row_layout.addWidget(btn)
@@ -165,7 +160,6 @@ class StaffFormPage(QWidget):
         self.handle_input_focus(self.fullname_input, None)
 
     def set_user_data(self, user_data=None):
-        """ تفريغ أو شحن البيانات للتمييز بين الإضافة والتعديل """
         self.user_data = user_data
         if user_data:
             self.form_title.setText("📝 Edit Staff Member Account")
@@ -197,14 +191,13 @@ class StaffFormPage(QWidget):
             self.email_container.hide()
 
     def handle_input_focus(self, input_field, event):
-        for box in [self.fullname_input, self.username_input, self.password_input, self.pincode_input,
-                    self.email_input]:
+        for box in [self.fullname_input, self.username_input, self.password_input, self.pincode_input, self.email_input]:
             box.setStyleSheet(
-                "padding: 7px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 12px; background-color: #F8FAFC; color: #1E293B;")
+                "padding: 8px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 14px; background-color: #F8FAFC; color: #1E293B;")
         self.current_focused_input = input_field
         if event: super(QLineEdit, input_field).focusInEvent(event)
         input_field.setStyleSheet(
-            "padding: 7px; border: 2px solid #6366F1; border-radius: 6px; font-size: 12px; background-color: #F5F3FF; color: #0F172A;")
+            "padding: 8px; border: 2px solid #6366F1; border-radius: 6px; font-size: 14px; background-color: #F5F3FF; color: #0F172A;")
 
     def handle_key_press(self, key):
         if not self.current_focused_input: return
@@ -296,12 +289,12 @@ class UserManagementPage(QWidget):
 
         self.add_staff_fab = QPushButton("➕ Add New Staff")
         self.add_staff_fab.setStyleSheet(
-            "background-color: #10B981; color: white; font-weight: bold; padding: 6px 14px; border-radius: 6px; font-size: 11px; border: none;")
+            "background-color: #10B981; color: white; font-weight: bold; padding: 8px 16px; border-radius: 6px; font-size: 13px; border: none;")
         self.add_staff_fab.clicked.connect(self.navigate_to_add_form)
 
         back_btn = QPushButton("⬅️ Menu")
         back_btn.setStyleSheet(
-            "padding: 4px 10px; background-color: #F1F5F9; border-radius: 6px; font-weight: bold; border: 1px solid #E2E8F0; color: #475569; font-size: 11px;")
+            "padding: 6px 14px; background-color: #F1F5F9; border-radius: 6px; font-weight: bold; border: 1px solid #E2E8F0; color: #475569; font-size: 13px;")
         back_btn.clicked.connect(self.on_back_to_menu)
 
         navigation_tabs.addWidget(self.tab_users_btn)
@@ -325,20 +318,20 @@ class UserManagementPage(QWidget):
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
         header.setSectionResizeMode(3, QHeaderView.Fixed)
-        self.page_users_widget.setColumnWidth(3, 90)
-        self.page_users_widget.verticalHeader().setDefaultSectionSize(30)
+        self.page_users_widget.setColumnWidth(3, 100)
+        self.page_users_widget.verticalHeader().setDefaultSectionSize(36)
         self.admin_sub_stack.addWidget(self.page_users_widget)
 
         self.page_meds_list = QListWidget()
         self.page_meds_list.setStyleSheet(
-            "border: 1px solid #E2E8F0; border-radius: 6px; background: #F8FAFC; font-size: 11px;")
+            "border: 1px solid #E2E8F0; border-radius: 6px; background: #F8FAFC; font-size: 14px;")
         self.admin_sub_stack.addWidget(self.page_meds_list)
 
         container_layout.addWidget(self.admin_sub_stack)
 
         self.refresh_hub_btn = QPushButton("🔄 Sync Cloud Directory")
         self.refresh_hub_btn.setStyleSheet(
-            "padding: 8px; font-size: 11px; font-weight: bold; background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; color: #475569;")
+            "padding: 10px; font-size: 13px; font-weight: bold; background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; color: #475569;")
         self.refresh_hub_btn.clicked.connect(self.sync_current_hub_view)
         container_layout.addWidget(self.refresh_hub_btn)
         view_layout.addWidget(container)
@@ -414,19 +407,19 @@ class UserManagementPage(QWidget):
 
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
-                actions_layout.setContentsMargins(2, 1, 2, 1)
-                actions_layout.setSpacing(4)
+                actions_layout.setContentsMargins(4, 2, 4, 2)
+                actions_layout.setSpacing(6)
 
                 edit_btn = QPushButton("✏️")
-                edit_btn.setFixedSize(26, 26)
+                edit_btn.setFixedSize(32, 32)
                 edit_btn.setStyleSheet(
-                    "background-color: #0EA5E9; color: white; border-radius: 6px; border: none; font-size: 11px;")
+                    "background-color: #0EA5E9; color: white; border-radius: 6px; border: none; font-size: 14px;")
                 edit_btn.clicked.connect(lambda checked, u=user_data: self.navigate_to_edit_form(u))
 
                 del_btn = QPushButton("🗑️")
-                del_btn.setFixedSize(26, 26)
+                del_btn.setFixedSize(32, 32)
                 del_btn.setStyleSheet(
-                    "background-color: #EF4444; color: white; border-radius: 6px; border: none; font-size: 11px;")
+                    "background-color: #EF4444; color: white; border-radius: 6px; border: none; font-size: 14px;")
                 del_btn.clicked.connect(lambda checked, u=user_data: self.handle_delete_user(u))
 
                 actions_layout.addWidget(edit_btn)
@@ -480,14 +473,14 @@ class UserManagementPage(QWidget):
                 row_layout.setContentsMargins(12, 6, 12, 6)
 
                 info_label = QLabel(display_text)
-                info_label.setStyleSheet("font-size: 12px; font-weight: bold; color: #1E293B;")
+                info_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #1E293B;")
                 row_layout.addWidget(info_label)
                 row_layout.addStretch()
 
                 purge_btn = QPushButton("🗑️ Purge Record")
-                purge_btn.setFixedSize(110, 28)
+                purge_btn.setFixedSize(130, 34)
                 purge_btn.setStyleSheet(
-                    "background-color: #EF4444; color: white; border-radius: 6px; font-weight: bold; font-size: 11px; border: none;")
+                    "background-color: #EF4444; color: white; border-radius: 6px; font-weight: bold; font-size: 13px; border: none;")
                 purge_btn.clicked.connect(lambda checked, m=med: self.execute_emergency_medicine_purge(m))
 
                 row_layout.addWidget(purge_btn)
@@ -512,13 +505,13 @@ class UserManagementPage(QWidget):
                 QMessageBox.critical(self, "Server Error ❌", str(e))
 
     def get_tab_style(self, active=True):
-        if active: return "background-color: #6366F1; color: white; font-weight: bold; padding: 6px 14px; border-radius: 6px; font-size: 11px; border: none;"
-        return "background-color: #F1F5F9; color: #475569; font-weight: bold; padding: 6px 14px; border-radius: 6px; font-size: 11px; border: 1px solid #E2E8F0;"
+        if active: return "background-color: #6366F1; color: white; font-weight: bold; padding: 8px 16px; border-radius: 6px; font-size: 13px; border: none;"
+        return "background-color: #F1F5F9; color: #475569; font-weight: bold; padding: 8px 16px; border-radius: 6px; font-size: 13px; border: 1px solid #E2E8F0;"
 
     def get_table_style(self):
         return """
-            QTableWidget { background-color: #FFFFFF; color: #334155; font-size: 11px; border: none; }
-            QHeaderView::section { background-color: #F8FAFC; font-weight: bold; border: none; padding: 6px; color: #64748B; font-size: 11px; border-bottom: 2px solid #E2E8F0; }
-            QTableWidget::item { padding: 4px; border-bottom: 1px solid #F1F5F9; }
+            QTableWidget { background-color: #FFFFFF; color: #334155; font-size: 14px; border: none; }
+            QHeaderView::section { background-color: #F8FAFC; font-weight: bold; border: none; padding: 8px; color: #64748B; font-size: 14px; border-bottom: 2px solid #E2E8F0; }
+            QTableWidget::item { padding: 6px; border-bottom: 1px solid #F1F5F9; }
             QTableWidget::item:selected { background-color: #EEF2FF; color: #4F46E5; }
         """

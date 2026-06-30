@@ -29,15 +29,15 @@ from screen.inventory_view_page import InventoryViewPage
 from inventory_check import show_low_stock_table
 import tkinter as tk
 
-# Import the Kiosk Router from the sibling Clinic directory
-from Clinic.main_gui import KioskRouter
+# Import KioskRouter from Clinic.kiosk_main
+from Clinic.kiosk_main import KioskRouter
 
 class MedicineSystemApp(QWidget):
-    """ Modern Dashboard Layout Navigation Core """
+    """ Simplified and Highly Readable Main Clinic Application Dashboard """
     def __init__(self):
         super().__init__()
-        self.resize(920, 620)
-        self.setWindowTitle("Clinic Operations Infrastructure")
+        self.resize(950, 650)
+        self.setWindowTitle("Clinic Management System")
         self.setStyleSheet("QWidget { font-family: 'Segoe UI'; }")
 
         self.stack = QStackedWidget(self)
@@ -57,8 +57,7 @@ class MedicineSystemApp(QWidget):
         self.inventory_view_page = InventoryViewPage(self, on_back_to_menu=lambda: self.stack.setCurrentIndex(1))
         self.stack.addWidget(self.inventory_view_page)  # Index 5
 
-        # Seamless Integration: Embed KioskRouter inside the existing main window stack framework
-        # When closing/returning from kiosk, it natively switches the index back to the main dashboard (Index 0)
+        # Seamless Integration: Embed KioskRouter inside the framework stack
         self.kiosk_router_page = KioskRouter(on_back_to_main=lambda: self.stack.setCurrentIndex(0))
         self.stack.addWidget(self.kiosk_router_page)  # Index 6
 
@@ -72,29 +71,31 @@ class MedicineSystemApp(QWidget):
         page.setStyleSheet("background-color: #F8FAFC;")
         layout = QVBoxLayout(page)
         layout.setAlignment(Qt.AlignCenter)
-        layout.setSpacing(24)
+        layout.setSpacing(25)
 
-        title = QLabel("Clinic Operations Management")
-        title.setStyleSheet("font-size: 26px; font-weight: bold; color: #0F172A; margin-bottom: 5px;")
-        layout.addWidget(title)
+        # Large and clear main title
+        title = QLabel("Clinic Main Menu")
+        title.setStyleSheet("font-size: 34px; font-weight: bold; color: #0F172A; margin-bottom: 15px;")
+        layout.addWidget(title, alignment=Qt.AlignCenter)
 
-        med_btn = QPushButton("💊 Medicine Stock Workspace")
+        # Clear, simplified main buttons with fixed safe boundaries to ensure symmetric layouts
+        med_btn = QPushButton("💊 Medicine Stock (Storage)")
+        med_btn.setFixedSize(440, 80)
         med_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        med_btn.setStyleSheet(self.get_menu_button_style("#4F46E5", "#4338CA"))
+        med_btn.setStyleSheet(self.get_large_menu_button_style("#4F46E5", "#4338CA"))
         med_btn.clicked.connect(lambda: self.stack.setCurrentIndex(1))
-        layout.addWidget(med_btn)
+        layout.addWidget(med_btn, alignment=Qt.AlignCenter)
 
-        # Patient Workspace button now cleanly transitions index context without popping extra system frames
-        patient_btn = QPushButton("👥 Patient File Workspace")
+        patient_btn = QPushButton("👥 Patient Kiosk (Check-In)")
+        patient_btn.setFixedSize(440, 80)
         patient_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        patient_btn.setStyleSheet(self.get_menu_button_style("#475569", "#334155"))
+        patient_btn.setStyleSheet(self.get_large_menu_button_style("#475569", "#334155"))
         patient_btn.clicked.connect(self.open_patient_kiosk)
-        layout.addWidget(patient_btn)
+        layout.addWidget(patient_btn, alignment=Qt.AlignCenter)
 
         self.stack.addWidget(page)
 
     def open_patient_kiosk(self):
-        """ Smoothly transitions the stacked index layer into the embedded Kiosk subsystem """
         self.stack.setCurrentIndex(6)
 
     def build_medicine_sub_menu(self):
@@ -102,46 +103,52 @@ class MedicineSystemApp(QWidget):
         page.setStyleSheet("background-color: #FFFFFF;")
         layout = QVBoxLayout(page)
         layout.setAlignment(Qt.AlignCenter)
-        layout.setSpacing(18)
+        layout.setSpacing(16)
 
-        title = QLabel("Medicine Control Operations")
-        title.setStyleSheet("font-size: 23px; font-weight: bold; color: #1E293B; margin-bottom: 10px;")
-        layout.addWidget(title)
+        # Clear sub-menu title
+        title = QLabel("Medicine Operations")
+        title.setStyleSheet("font-size: 30px; font-weight: bold; color: #1E293B; margin-bottom: 15px;")
+        layout.addWidget(title, alignment=Qt.AlignCenter)
 
-        add_med_btn = QPushButton("➕ Add New Medication")
-        add_med_btn.setStyleSheet(self.get_menu_button_style("#0D9488", "#0F766E"))
+        add_med_btn = QPushButton("➕ Add New Medicine")
+        add_med_btn.setFixedSize(440, 70)
+        add_med_btn.setStyleSheet(self.get_large_menu_button_style("#0D9488", "#0F766E"))
         add_med_btn.clicked.connect(lambda: self.trigger_secure_action("Add Medicine"))
-        layout.addWidget(add_med_btn)
+        layout.addWidget(add_med_btn, alignment=Qt.AlignCenter)
 
-        dispense_btn = QPushButton("📦 Dispense / Deduct Quantity")
-        dispense_btn.setStyleSheet(self.get_menu_button_style("#EF4444", "#DC2626"))
+        dispense_btn = QPushButton("📦 Give Medicine (Dispense)")
+        dispense_btn.setFixedSize(440, 70)
+        dispense_btn.setStyleSheet(self.get_large_menu_button_style("#EF4444", "#DC2626"))
         dispense_btn.clicked.connect(lambda: self.trigger_secure_action("Dispense Medicine"))
-        layout.addWidget(dispense_btn)
+        layout.addWidget(dispense_btn, alignment=Qt.AlignCenter)
 
-        view_stock_btn = QPushButton("📋 Browse Active Inventory Stores")
-        view_stock_btn.setStyleSheet(self.get_menu_button_style("#3B82F6", "#2563EB"))
+        view_stock_btn = QPushButton("📋 View Active Stock")
+        view_stock_btn.setFixedSize(440, 70)
+        view_stock_btn.setStyleSheet(self.get_large_menu_button_style("#3B82F6", "#2563EB"))
         view_stock_btn.clicked.connect(self.open_inventory_browser)
-        layout.addWidget(view_stock_btn)
+        layout.addWidget(view_stock_btn, alignment=Qt.AlignCenter)
 
-        # 👇 הקוד להוספה: כפתור הדוח החדש 👇
-        low_stock_btn = QPushButton("⚠️ Generate Low Stock Report")
-        low_stock_btn.setStyleSheet(self.get_menu_button_style("#8B5CF6", "#7C3AED"))
+        low_stock_btn = QPushButton("⚠️ Low Stock Report")
+        low_stock_btn.setFixedSize(440, 70)
+        low_stock_btn.setStyleSheet(self.get_large_menu_button_style("#8B5CF6", "#7C3AED"))
         low_stock_btn.clicked.connect(self.launch_low_stock_report)
-        layout.addWidget(low_stock_btn)
-        # 👆 עד כאן ההוספה 👆
+        layout.addWidget(low_stock_btn, alignment=Qt.AlignCenter)
 
-        manager_btn = QPushButton("🔑 Manager Administration Portal")
-        manager_btn.setStyleSheet(self.get_menu_button_style("#D97706", "#B45309"))
+        manager_btn = QPushButton("🔑 Manager Portal")
+        manager_btn.setFixedSize(440, 70)
+        manager_btn.setStyleSheet(self.get_large_menu_button_style("#D97706", "#B45309"))
         manager_btn.clicked.connect(self.trigger_manager_portal)
-        layout.addWidget(manager_btn)
+        layout.addWidget(manager_btn, alignment=Qt.AlignCenter)
 
-        back_btn = QPushButton("⬅️ Return to Main Menu")
+        # Easy back button link
+        back_btn = QPushButton("⬅️ Go Back to Main Menu")
+        back_btn.setCursor(QCursor(Qt.PointingHandCursor))
         back_btn.setStyleSheet("""
-            QPushButton { background-color: transparent; color: #64748B; border: none; font-weight: bold; font-size: 14px; text-decoration: underline; margin-top: 10px;}
+            QPushButton { background-color: transparent; color: #64748B; border: none; font-weight: bold; font-size: 16px; text-decoration: underline; margin-top: 15px;}
             QPushButton:hover { color: #475569; }
         """)
         back_btn.clicked.connect(lambda: self.stack.setCurrentIndex(0))
-        layout.addWidget(back_btn)
+        layout.addWidget(back_btn, alignment=Qt.AlignCenter)
 
         self.stack.addWidget(page)
 
@@ -188,21 +195,21 @@ class MedicineSystemApp(QWidget):
             else:
                 QMessageBox.critical(self, "Security Error ❌", f"Only verified 'Maneger' roles can enter this panel. Your role is: {role_val}")
 
-    def get_menu_button_style(self, bg, press_bg):
+    def get_large_menu_button_style(self, bg, press_bg):
         return f"""
             QPushButton {{
                 background-color: {bg}; color: white;
-                font-size: 15px; font-weight: bold;
-                padding: 16px; border-radius: 12px; width: 320px; border: none;
+                font-size: 18px; font-weight: bold;
+                border-radius: 14px; border: none;
             }}
             QPushButton:pressed {{ background-color: {press_bg}; }}
         """
 
     def launch_low_stock_report(self):
         root = tk.Tk()
-        root.withdraw()  # מסתיר את חלון הבסיס הריק של Tkinter
-        show_low_stock_table()  # קורא לפונקציה מהקובץ שעשינו
-        root.mainloop()  # מריץ את הטבלה בצורה חלקה
+        root.withdraw()
+        show_low_stock_table()
+        root.mainloop()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
