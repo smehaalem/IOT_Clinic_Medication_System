@@ -99,10 +99,11 @@ def get_aggregated_stock_for_barcode(barcode):
     return aggregated_stock
 
 
-def dispense_medication_to_patient(barcode, record_id, pills_to_dispense, doctor_name):
+def dispense_medication_to_patient(barcode, record_id, pills_to_dispense, staff_name, doctor_name):
     """
     Handles outbound medication logic (Dispensing pills to a specific patient).
     Automatically deletes the record if the remaining quantity reaches zero.
+    Logs both the staff member performing the action and the authorizing Doctor.
     """
     print(f"\n[DISPENSE] Request to dispense {pills_to_dispense} pills from record ID: {record_id}")
 
@@ -134,13 +135,14 @@ def dispense_medication_to_patient(barcode, record_id, pills_to_dispense, doctor
         airtable_api.update_medication_quantity(record_id, updated_current)
         print(f"✅ Dispense Successful: {pills_to_dispense} pills deducted. Remaining: {updated_current}")
 
-    # תיעוד בהיסטוריה
+    # תיעוד בהיסטוריה באמצעות הפונקציה המעודכנת
     airtable_api.log_transaction(
         action_type="Dispense",
         barcode=barcode,
-        action_by_user=doctor_name,
+        action_by_user=staff_name,          # נשמר תחת השדה המקורי Action By User ללא נגיעה
         quantity_taken=pills_to_dispense,
-        removal_reason="Dispensed to Patient"
+        removal_reason="Dispensed to Patient",
+        doctor_name=doctor_name             # נשמר תחת השדה החדש בטבלה "Doctor"
     )
 
     return {

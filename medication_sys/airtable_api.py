@@ -4,6 +4,9 @@ from datetime import datetime
 
 from pyairtable import Api
 import config
+import random
+
+
 
 # Initialize connection to the Airtable API cloud
 try:
@@ -13,11 +16,43 @@ try:
     stock_table = airtable_api.table(config.BASE_ID, config.TABLE_AVAILABLE_STOCK)
     history_table = airtable_api.table(config.BASE_ID, config.TABLE_DISPENSED_HISTORY)
     users_table = airtable_api.table(config.BASE_ID, config.TABLE_SYSTEM_USERS)
+    mock_patients_table = airtable_api.table(config.BASE_ID, config.TABLE_SYSTEM_MOCK)
 
     print("🌍 Airtable cloud connection successfully initialized!")
 except Exception as e:
     print(f"❌ Error initializing Airtable connection: {e}")
 
+
+
+def assign_mock_data_to_patient(new_patient_id):
+    """
+    Finds all mock rows where Personal ID is '0', picks one at random,
+    and updates its Personal ID with the user's provided ID.
+    Returns the updated fields dictionary if successful, or None if no empty rows left.
+    """
+    try:
+        # 1. סינון ב-Airtable למציאת שורות פנויות שבהן ה-ID הוא "0"
+        formula = "{Personal ID} = '0'"
+        available_records = mock_patients_table.all(formula=formula)
+
+        if not available_records:
+            print("⚠️ No available mock records left with Personal ID = '0'!")
+            return None
+
+        # 2. בחירת רשומה אחת אקראית מתוך הרשימה שנמצאה
+        chosen_record = random.choice(available_records)
+        record_id = chosen_record['id']
+
+        # 3. עדכון שדה ה-Personal ID של הרשומה הנבחרת ל-ID החדש
+        updated_record = mock_patients_table.update(record_id, {
+            "Personal ID": str(new_patient_id)
+        })
+
+        return updated_record['fields']
+
+    except Exception as e:
+        print(f"❌ Error assigning mock data in Airtable: {e}")
+        raise e
 
 # =====================================================================
 # 🛡️ SMART SAFE EXTRACTOR HUB (الدالة العبقرية لحماية وفك جميع حقول السيرفر)
@@ -327,16 +362,18 @@ def authenticate_user(username, password):
 # 📝 DISPENSED HISTORY TABLE FUNCTIONS
 # =====================================================================
 
-def log_transaction(action_type, barcode, action_by_user, quantity_taken, removal_reason=""):
+def log_transaction(action_type, barcode, action_by_user, quantity_taken, removal_reason="", doctor_name=""):
     """
     Logs a new transaction to the Dispensed_History table.
+    Now supports saving the Doctor's name under the 'Doctor' field column.
     """
     try:
         fields_data = {
             "Action Type": str(action_type),
             "Barcode": str(barcode),
             "Action By User": str(action_by_user),
-            "Quantity": int(quantity_taken)
+            "Quantity": int(quantity_taken),
+            "Doctor": str(doctor_name)
         }
 
         if removal_reason:
