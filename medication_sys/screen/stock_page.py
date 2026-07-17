@@ -1,27 +1,59 @@
 import sys
 import os
 from datetime import datetime
+from calendar import monthrange
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QFrame, QMessageBox, QStackedWidget, QDateEdit, QSpinBox,
-    QDialog, QListWidget, QListWidgetItem, QComboBox
+    QDialog, QListWidget, QListWidgetItem, QComboBox, QScrollArea, QSizePolicy, QLayout, QGridLayout
 )
 
-from PyQt5.QtCore import Qt, QDate, QEvent
-from PyQt5.QtGui import QCursor
+from PyQt5.QtCore import Qt, QDate, QEvent, QTimer
+from PyQt5.QtGui import QCursor, QIntValidator
 import airtable_api
 
 
+def make_dialog_kiosk_safe(dialog):
+    flags = dialog.windowFlags()
+    flags |= Qt.Dialog
+    flags |= Qt.WindowStaysOnTopHint
+    flags &= ~Qt.WindowMinimizeButtonHint
+    flags &= ~Qt.WindowMaximizeButtonHint
+    dialog.setWindowFlags(flags)
+    dialog.setWindowModality(Qt.ApplicationModal)
+
+
+def keep_dialog_visible(dialog):
+    try:
+        dialog.showNormal()
+        dialog.raise_()
+        dialog.activateWindow()
+    except Exception:
+        pass
+
+
+def show_safe_message(parent, icon, title, text):
+    box = QMessageBox(parent)
+    box.setIcon(icon)
+    box.setWindowTitle(title)
+    box.setText(text)
+    box.setStandardButtons(QMessageBox.Ok)
+    make_dialog_kiosk_safe(box)
+    QTimer.singleShot(0, lambda: keep_dialog_visible(box))
+    return box.exec_()
+
+
 class BatchSelectionDialog(QDialog):
-    """ نافذة منبثقة ذكية تخير المستخدم بين تعديل دفعة قديمة أو إضافة دفعة جديدة """
+    """ ????? ?????? ???? ???? ???????? ??? ????? ???? ????? ?? ????? ???? ????? """
 
     def __init__(self, batches, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Product Batches Detected")
+        self.setWindowTitle("Existing Batches")
         self.setFixedWidth(440)
+        make_dialog_kiosk_safe(self)
         self.selected_batch = None
         self.action_type = None  # "edit" or "new"
 
@@ -29,7 +61,7 @@ class BatchSelectionDialog(QDialog):
         layout.setSpacing(12)
         layout.setContentsMargins(15, 15, 15, 15)
 
-        title = QLabel("Multiple Batches Found!")
+        title = QLabel("Existing batches found")
         title.setStyleSheet("font-size: 18px; font-weight: bold; color: #0EA5E9;")
         layout.addWidget(title)
 
@@ -40,6 +72,10 @@ class BatchSelectionDialog(QDialog):
         layout.addWidget(desc)
 
         self.list_widget = QListWidget()
+        self.list_widget.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.list_widget.setMinimumHeight(130)
+        self.list_widget.setMaximumHeight(220)
         self.list_widget.setStyleSheet("""
             QListWidget { border: 1px solid #E2E8F0; border-radius: 8px; font-size: 14px; padding: 6px; background-color: #F8FAFC; }
             QListWidget::item { padding: 8px; border-bottom: 1px solid #F1F5F9; color: #1E293B; }
@@ -47,7 +83,8 @@ class BatchSelectionDialog(QDialog):
         """)
 
         for b in batches:
-            item_text = f"Batch: {b['batch_number']} | Exp: {b['expiry_date']} (📦 {b['current_quantity']} Pills)"
+            expiry_display = self.format_expiry_for_display(b.get("expiry_date", ""))
+            item_text = f"Batch: {b['batch_number']} | Exp: {expiry_display} | Qty: {b['current_quantity']}"
             item = QListWidgetItem(item_text)
             item.setData(Qt.UserRole, b)
             self.list_widget.addItem(item)
@@ -56,14 +93,14 @@ class BatchSelectionDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(10)
 
-        edit_btn = QPushButton("✏️ Edit Selected")
-        edit_btn.setMinimumHeight(42)
+        edit_btn = QPushButton("Edit selected")
+        edit_btn.setMinimumHeight(36)
         edit_btn.setStyleSheet(
             "background-color: #EA580C; color: white; font-size: 14px; font-weight: bold; border-radius: 8px; border: none;")
         edit_btn.clicked.connect(self.on_edit_clicked)
 
-        new_batch_btn = QPushButton("➕ Create New")
-        new_batch_btn.setMinimumHeight(42)
+        new_batch_btn = QPushButton("New batch")
+        new_batch_btn.setMinimumHeight(36)
         new_batch_btn.setStyleSheet(
             "background-color: #0D9488; color: white; font-size: 14px; font-weight: bold; border-radius: 8px; border: none;")
         new_batch_btn.clicked.connect(self.on_new_clicked)
@@ -72,10 +109,22 @@ class BatchSelectionDialog(QDialog):
         btn_layout.addWidget(new_batch_btn)
         layout.addLayout(btn_layout)
 
+    @staticmethod
+    def format_expiry_for_display(expiry_value):
+        date_value = QDate.fromString(str(expiry_value), "yyyy-MM-dd")
+        if date_value.isValid():
+            return date_value.toString("MM/yyyy")
+        return str(expiry_value)
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.WindowStateChange and self.isMinimized():
+            QTimer.singleShot(0, lambda: keep_dialog_visible(self))
+        super().changeEvent(event)
+
     def on_edit_clicked(self):
         current_item = self.list_widget.currentItem()
         if not current_item:
-            QMessageBox.warning(self, "Selection Required", "Please select a batch from the list to edit.")
+            show_safe_message(self, QMessageBox.Warning, "Selection Required", "Please select a batch to edit.")
             return
         self.selected_batch = current_item.data(Qt.UserRole)
         self.action_type = "edit"
@@ -98,6 +147,11 @@ class MedicationManagementPage(QWidget):
         self.current_focused_input = None
         self.existing_record_id = None
 
+        # Stores the real barcode when an existing medicine is found by name.
+        # This prevents new batches created through name search from being
+        # saved as NO_BARCODE.
+        self.resolved_barcode = None
+
         self.internal_stack = QStackedWidget(self)
 
         self.init_scan_page()  # Index 0
@@ -108,17 +162,96 @@ class MedicationManagementPage(QWidget):
         main_layout.addWidget(self.internal_stack)
 
         self.internal_stack.setCurrentIndex(0)
+        QTimer.singleShot(150, self.focus_stock_barcode_input)
+
+    def _make_scroll_area(self, widget):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setStyleSheet("""
+            QScrollArea { border: none; background-color: transparent; }
+            QScrollBar:vertical { border: none; background: #F1F5F9; width: 14px; margin: 0px; border-radius: 7px; }
+            QScrollBar::handle:vertical { background: #CBD5E1; min-height: 35px; border-radius: 7px; }
+            QScrollBar::handle:vertical:hover { background: #94A3B8; }
+        """)
+        scroll.setWidget(widget)
+        return scroll
 
     def set_current_user(self, user_record_id):
         self.current_user_record_id = user_record_id
+
+    @staticmethod
+    def extract_barcode_from_fields(fields):
+        """Return a clean barcode from the possible Airtable barcode fields."""
+        barcode_value = (
+            fields.get("Barcode")
+            or fields.get("Barcode lookup")
+            or fields.get("Barcode (from Barcode)")
+            or fields.get("Product Barcode")
+            or fields.get("Barcode Number")
+        )
+
+        if isinstance(barcode_value, list):
+            barcode_value = barcode_value[0] if barcode_value else ""
+
+        clean_barcode = str(barcode_value or "").strip()
+
+        if clean_barcode.upper() in ("", "NONE", "NO_BARCODE", "N/A"):
+            return None
+
+        return clean_barcode
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(150, self.focus_stock_barcode_input)
+
+    def focus_stock_barcode_input(self):
+        try:
+            if self.internal_stack.currentIndex() != 0:
+                return
+            if self.verification_mode_combo.currentText() != "Barcode":
+                self.verification_mode_combo.setCurrentText("Barcode")
+            self.barcode_input.setFocus(Qt.OtherFocusReason)
+            self.barcode_input.selectAll()
+        except Exception:
+            pass
+
+
+    def _move_dialog_to_upper_position(self, dialog):
+        try:
+            parent = self.window()
+            if parent is not None:
+                top_left = parent.mapToGlobal(parent.rect().topLeft())
+                x = top_left.x() + max(0, (parent.width() - dialog.width()) // 2)
+                y = top_left.y() + 35
+            else:
+                screen = dialog.screen().availableGeometry()
+                x = screen.x() + max(0, (screen.width() - dialog.width()) // 2)
+                y = screen.y() + 35
+            dialog.move(x, y)
+        except Exception:
+            pass
+
+    def ask_upper_confirmation(self, title, message):
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Question)
+        box.setWindowTitle(title)
+        box.setText(message)
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        box.setDefaultButton(QMessageBox.No)
+        make_dialog_kiosk_safe(box)
+        QTimer.singleShot(0, lambda: self._move_dialog_to_upper_position(box))
+        return box.exec_() == QMessageBox.Yes
 
     def init_scan_page(self):
         page = QWidget()
         page.setStyleSheet("background-color: #F8FAFC;")
 
         main_layout = QHBoxLayout(page)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setSpacing(8)
 
         left_card = QFrame()
         left_card.setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;")
@@ -127,10 +260,10 @@ class MedicationManagementPage(QWidget):
         left_layout.setSpacing(10)
 
         header_layout = QHBoxLayout()
-        title = QLabel("📦 Stock Ingestion Engine")
+        title = QLabel("Add / Update Stock")
         title.setStyleSheet("font-size: 18px; font-weight: bold; color: #0F172A; border: none;")
 
-        back_btn = QPushButton("⬅️ Menu")
+        back_btn = QPushButton("Menu")
         back_btn.setCursor(QCursor(Qt.PointingHandCursor))
         back_btn.setStyleSheet("""
             QPushButton { padding: 6px 14px; font-size: 13px; background-color: #F1F5F9; border-radius: 6px; font-weight: bold; color: #475569; border: 1px solid #E2E8F0; }
@@ -145,12 +278,12 @@ class MedicationManagementPage(QWidget):
 
         left_layout.addSpacing(5)
 
-        # 🔥 ميزة مضافة: اختيار نوع الفحص (باركود أو اسم الدواء لغير المعلف)
+        # ?? ???? ?????: ?????? ??? ????? (?????? ?? ??? ?????? ???? ??????)
         type_select_layout = QHBoxLayout()
         type_select_layout.addWidget(
-            QLabel("Verification Method:", styleSheet="font-size: 14px; font-weight: bold; color: #475569;"))
+            QLabel("Search by:", styleSheet="font-size: 14px; font-weight: bold; color: #475569;"))
         self.verification_mode_combo = QComboBox()
-        self.verification_mode_combo.addItems(["Search by Barcode", "Search by Medicine Name"])
+        self.verification_mode_combo.addItems(["Barcode", "Medicine Name"])
         self.verification_mode_combo.setStyleSheet(
             "padding: 6px; font-size: 14px; background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 6px;")
         self.verification_mode_combo.currentIndexChanged.connect(self.update_scan_placeholder)
@@ -158,22 +291,22 @@ class MedicationManagementPage(QWidget):
         type_select_layout.addStretch()
         left_layout.addLayout(type_select_layout)
 
-        self.input_label = QLabel("Scan Product Barcode Identity:")
+        self.input_label = QLabel("Barcode:")
         self.input_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #475569;")
         left_layout.addWidget(self.input_label)
 
         self.barcode_input = QLineEdit()
-        self.barcode_input.setPlaceholderText("Scan barcode or enter digits manually...")
+        self.barcode_input.setPlaceholderText("Scan barcode or enter barcode...")
         self.barcode_input.setStyleSheet(
             "padding: 10px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 14px; background-color: #F8FAFC;")
         self.barcode_input.focusInEvent = lambda event: self.handle_input_focus(self.barcode_input, event)
         self.barcode_input.returnPressed.connect(self.check_input_source)
         left_layout.addWidget(self.barcode_input)
 
-        search_btn = QPushButton("🔍 Verify Cloud & Smart Fill")
+        search_btn = QPushButton("Search")
         search_btn.setCursor(QCursor(Qt.PointingHandCursor))
         search_btn.setStyleSheet("""
-            QPushButton { background-color: #0D9488; color: white; padding: 12px; font-weight: bold; border-radius: 6px; border: none; font-size: 14px; }
+            QPushButton { background-color: #0D9488; color: white; padding: 10px; font-weight: bold; border-radius: 6px; border: none; font-size: 14px; }
             QPushButton:hover { background-color: #0F766E; }
         """)
         search_btn.clicked.connect(self.check_input_source)
@@ -182,18 +315,18 @@ class MedicationManagementPage(QWidget):
 
         main_layout.addWidget(left_card, stretch=5)
 
-        # الكيبورد الرقمي والورقي المدمج
+        # ???????? ?????? ??????? ??????
         self.kb_card = QFrame()
         self.kb_card.setStyleSheet("background-color: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0;")
         kb_layout = QVBoxLayout(self.kb_card)
 
-        title_pad = QLabel("🧮 Entry Pad:")
+        title_pad = QLabel("Keypad")
         title_pad.setStyleSheet("font-size: 12px; color: #64748B; font-weight: bold; padding-left: 2px;")
         kb_layout.addWidget(title_pad)
 
         num_grid = QVBoxLayout()
         num_grid.setSpacing(4)
-        rows = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['Clear', '0', '⌫', '🔽']]
+        rows = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['Clear', '0', 'Back', 'Hide']]
         for row in rows:
             r_lay = QHBoxLayout()
             r_lay.setSpacing(4)
@@ -201,7 +334,7 @@ class MedicationManagementPage(QWidget):
                 btn = QPushButton(k)
                 btn.setFocusPolicy(Qt.NoFocus)
                 btn.setMinimumHeight(45)
-                if k in ['Clear', '⌫', '🔽']:
+                if k in ['Clear', 'Back', 'Hide']:
                     btn.setStyleSheet(
                         "background-color: #CBD5E1; color: #1E293B; font-weight: bold; font-size: 13px; border-radius: 6px; border: none;")
                 else:
@@ -220,107 +353,179 @@ class MedicationManagementPage(QWidget):
         self.internal_stack.addWidget(page)
 
     def update_scan_placeholder(self):
-        """ يغير التعليمات والنصوص بناءً على خيار المستخدم (اسم أو باركود) """
+        """ ???? ????????? ??????? ????? ??? ???? ???????? (??? ?? ??????) """
         if self.verification_mode_combo.currentIndex() == 0:
-            self.input_label.setText("Scan Product Barcode Identity:")
-            self.barcode_input.setPlaceholderText("Scan barcode or enter digits manually...")
+            self.input_label.setText("Barcode:")
+            self.barcode_input.setPlaceholderText("Scan barcode or enter barcode...")
+            QTimer.singleShot(0, self.focus_stock_barcode_input)
         else:
-            self.input_label.setText("Enter Medicine Name:")
-            self.barcode_input.setPlaceholderText("Type medication name (e.g., Paracetamol)...")
+            self.input_label.setText("Medicine Name:")
+            self.barcode_input.setPlaceholderText("Type medicine name...")
+
+    def _make_form_field(self, label_text, field_widget):
+        box = QWidget()
+        box_layout = QVBoxLayout(box)
+        box_layout.setContentsMargins(0, 0, 0, 0)
+        box_layout.setSpacing(3)
+
+        label = QLabel(label_text)
+        label.setStyleSheet("font-size: 12px; font-weight: bold; color: #475569;")
+        box_layout.addWidget(label)
+
+        field_widget.setMinimumHeight(34)
+        field_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        box_layout.addWidget(field_widget)
+        return box
 
     def init_form_page(self):
         page = QWidget()
         page.setStyleSheet("background-color: #F8FAFC;")
 
-        main_layout = QHBoxLayout(page)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(12)
+        outer_layout = QVBoxLayout(page)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        page_content = QWidget()
+        page_content.setStyleSheet("background-color: #F8FAFC;")
+        page_content.setMinimumHeight(560)
+
+        main_layout = QHBoxLayout(page_content)
+        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setSpacing(8)
 
         form_card = QFrame()
         form_card.setStyleSheet("""
-            background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;
-            QLineEdit, QDateEdit, QSpinBox {
-                padding: 8px; border: 1px solid #CBD5E1; border-radius: 6px; 
-                font-size: 14px; background-color: #F8FAFC; color: #0F172A;
+            QFrame { background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; }
+            QLabel { border: none; background-color: transparent; }
+            QLineEdit, QComboBox, QSpinBox {
+                padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px;
+                font-size: 13px; background-color: #F8FAFC; color: #0F172A;
             }
         """)
+        form_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
         form_layout = QVBoxLayout(form_card)
-        form_layout.setContentsMargins(15, 15, 15, 15)
-        form_layout.setSpacing(6)
+        form_layout.setContentsMargins(10, 10, 10, 10)
+        form_layout.setSpacing(8)
+        form_layout.setSizeConstraint(QLayout.SetDefaultConstraint)
 
-        self.form_title = QLabel("Register New Medication Stock")
-        self.form_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0D9488; margin-bottom: 2px;")
-        form_layout.addWidget(self.form_title)
+        header_layout = QHBoxLayout()
+        self.form_title = QLabel("Add / Update Stock")
+        self.form_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0D9488; border: none;")
+        header_layout.addWidget(self.form_title)
+        header_layout.addStretch()
 
-        form_layout.addWidget(QLabel("Medicine Name", styleSheet="font-size: 13px; font-weight: bold; color: #475569;"))
+        back_form_btn = QPushButton("Back")
+        back_form_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        back_form_btn.setMinimumHeight(32)
+        back_form_btn.setStyleSheet("""
+            QPushButton { background-color: #F1F5F9; color: #475569; padding: 6px 14px; font-size: 13px; font-weight: bold; border-radius: 6px; border: 1px solid #E2E8F0; }
+            QPushButton:hover { background-color: #E2E8F0; }
+        """)
+        back_form_btn.clicked.connect(self.go_back_to_stock_search)
+        header_layout.addWidget(back_form_btn)
+
+        form_layout.addLayout(header_layout)
+
         self.name_input = QLineEdit()
         self.name_input.focusInEvent = lambda event: self.handle_input_focus(self.name_input, event)
-        form_layout.addWidget(self.name_input)
 
-        form_layout.addWidget(QLabel("Category", styleSheet="font-size: 13px; font-weight: bold; color: #475569;"))
         self.category_input = QLineEdit()
         self.category_input.focusInEvent = lambda event: self.handle_input_focus(self.category_input, event)
-        form_layout.addWidget(self.category_input)
 
-        form_layout.addWidget(QLabel("Active Pharmaceutical Ingredient",
-                                     styleSheet="font-size: 13px; font-weight: bold; color: #475569;"))
         self.ingredient_input = QLineEdit()
         self.ingredient_input.focusInEvent = lambda event: self.handle_input_focus(self.ingredient_input, event)
-        form_layout.addWidget(self.ingredient_input)
 
-        form_layout.addWidget(
-            QLabel("Dosage Strength (mg/ml)", styleSheet="font-size: 13px; font-weight: bold; color: #475569;"))
         self.dosage_input = QLineEdit()
         self.dosage_input.focusInEvent = lambda event: self.handle_input_focus(self.dosage_input, event)
-        form_layout.addWidget(self.dosage_input)
 
-        form_layout.addWidget(
-            QLabel("Batch Number / Serial", styleSheet="font-size: 13px; font-weight: bold; color: #475569;"))
         self.batch_input = QLineEdit()
         self.batch_input.focusInEvent = lambda event: self.handle_input_focus(self.batch_input, event)
-        form_layout.addWidget(self.batch_input)
 
-        form_layout.addWidget(
-            QLabel("Product Expiry Date", styleSheet="font-size: 13px; font-weight: bold; color: #475569;"))
-        self.expiry_input = QDateEdit()
-        self.expiry_input.setCalendarPopup(True)
-        self.expiry_input.setDate(QDate.currentDate())
-        self.expiry_input.focusInEvent = lambda event: self.handle_input_focus(self.expiry_input, event)
-        form_layout.addWidget(self.expiry_input)
+        self.expiry_month_input = QComboBox()
+        self.expiry_month_input.addItems([f"{month:02d}" for month in range(1, 13)])
+        self.expiry_month_input.setEditable(True)
+        self.expiry_month_input.setInsertPolicy(QComboBox.NoInsert)
+        self.expiry_month_input.lineEdit().setValidator(QIntValidator(1, 12, self))
+        self.expiry_month_input.lineEdit().setMaxLength(2)
+        self.expiry_month_input.lineEdit().setPlaceholderText("MM")
+        self.expiry_month_input.setCurrentText(f"{QDate.currentDate().month():02d}")
 
-        form_layout.addWidget(
-            QLabel("Pills Count (Quantity)", styleSheet="font-size: 13px; font-weight: bold; color: #475569;"))
+        self.expiry_year_input = QComboBox()
+        current_year = QDate.currentDate().year()
+        self.expiry_year_input.addItems([str(year) for year in range(current_year, current_year + 21)])
+        self.expiry_year_input.setEditable(True)
+        self.expiry_year_input.setInsertPolicy(QComboBox.NoInsert)
+        self.expiry_year_input.lineEdit().setValidator(QIntValidator(2000, 9999, self))
+        self.expiry_year_input.lineEdit().setMaxLength(4)
+        self.expiry_year_input.lineEdit().setPlaceholderText("YYYY")
+        self.expiry_year_input.setCurrentText(str(current_year))
+
+        self.expiry_selector = QWidget()
+        expiry_selector_layout = QHBoxLayout(self.expiry_selector)
+        expiry_selector_layout.setContentsMargins(0, 0, 0, 0)
+        expiry_selector_layout.setSpacing(6)
+        expiry_selector_layout.addWidget(self.expiry_month_input)
+        expiry_selector_layout.addWidget(QLabel("/"))
+        expiry_selector_layout.addWidget(self.expiry_year_input)
+
         self.quantity_input = QSpinBox()
         self.quantity_input.setRange(1, 5000)
         self.quantity_input.focusInEvent = lambda event: self.handle_input_focus(self.quantity_input, event)
-        form_layout.addWidget(self.quantity_input)
 
-        main_layout.addSpacing(6)
+        grid_holder = QWidget()
+        grid = QGridLayout(grid_holder)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(8)
 
-        self.submit_med_btn = QPushButton("💾 Commit New Stock to Cloud")
+        grid.addWidget(self._make_form_field("Medicine Name", self.name_input), 0, 0)
+        grid.addWidget(self._make_form_field("Category", self.category_input), 0, 1)
+        grid.addWidget(self._make_form_field("Active Ingredient", self.ingredient_input), 1, 0)
+        grid.addWidget(self._make_form_field("Dosage", self.dosage_input), 1, 1)
+        grid.addWidget(self._make_form_field("Batch Number", self.batch_input), 2, 0)
+        grid.addWidget(self._make_form_field("Expiry Month / Year", self.expiry_selector), 2, 1)
+        grid.addWidget(self._make_form_field("Quantity", self.quantity_input), 3, 0)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        form_layout.addWidget(grid_holder)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(8)
+
+        self.submit_med_btn = QPushButton("Save")
         self.submit_med_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.submit_med_btn.setMinimumHeight(38)
         self.submit_med_btn.setStyleSheet("""
-            QPushButton { background-color: #0D9488; color: white; padding: 12px; font-weight: bold; border-radius: 6px; border: none; font-size: 14px; }
+            QPushButton { background-color: #0D9488; color: white; padding: 8px; font-weight: bold; border-radius: 6px; border: none; font-size: 14px; }
             QPushButton:hover { background-color: #0F766E; }
         """)
         self.submit_med_btn.clicked.connect(self.save_medication)
-        form_layout.addWidget(self.submit_med_btn)
 
-        cancel_btn = QPushButton("❌ Cancel & Go Back")
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setMinimumHeight(38)
         cancel_btn.setStyleSheet("""
             QPushButton { background-color: #F1F5F9; color: #475569; padding: 8px; font-size: 13px; font-weight: 600; border-radius: 6px; border: 1px solid #E2E8F0; }
             QPushButton:hover { background-color: #E2E8F0; }
         """)
-        cancel_btn.clicked.connect(lambda: self.internal_stack.setCurrentIndex(0))
-        form_layout.addWidget(cancel_btn)
+        cancel_btn.clicked.connect(self.go_back_to_stock_search)
 
-        main_layout.addWidget(form_card, stretch=5)
+        btn_layout.addWidget(self.submit_med_btn)
+        btn_layout.addWidget(cancel_btn)
+        form_layout.addLayout(btn_layout)
+        form_layout.addStretch()
+
+        form_card.setMinimumWidth(520)
+        form_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        main_layout.addWidget(form_card, stretch=7)
 
         self.kb_full_card = QFrame()
         self.kb_full_card.setStyleSheet("background-color: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0;")
         kb_full_card_layout = QVBoxLayout(self.kb_full_card)
+        kb_full_card_layout.setContentsMargins(6, 6, 6, 6)
+        kb_full_card_layout.setSpacing(4)
 
-        title_kb2 = QLabel("⌨️ Touch Workspace Keyboard")
+        title_kb2 = QLabel("Keyboard")
         title_kb2.setStyleSheet("font-size: 12px; color: #64748B; font-weight: bold; border: none; margin-bottom: 2px;")
         kb_full_card_layout.addWidget(title_kb2)
 
@@ -333,54 +538,75 @@ class MedicationManagementPage(QWidget):
             ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
             ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
             ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', '-'],
-            ['z', 'x', 'c', 'v', 'b', 'n', 'm', ' ', 'Clear', '⌫', '🔽']
+            ['z', 'x', 'c', 'v', 'b', 'n', 'm', ' ', 'Clear', 'Back', 'Hide']
         ]
         for row in rows:
             r_lay = QHBoxLayout()
-            r_lay.setSpacing(4)
+            r_lay.setSpacing(3)
             for key in row:
                 btn = QPushButton(key)
                 btn.setFocusPolicy(Qt.NoFocus)
-                btn.setMinimumHeight(42)
+                btn.setMinimumHeight(34)
 
-                if key in ['Clear', '⌫', '🔽']:
+                if key in ['Clear', 'Back', 'Hide']:
                     btn.setStyleSheet(
-                        "background-color: #CBD5E1; color: #1E293B; font-weight: bold; font-size: 12px; border-radius: 6px; border: none;")
+                        "background-color: #CBD5E1; color: #1E293B; font-weight: bold; font-size: 11px; border-radius: 6px; border: none;")
                 elif key == ' ':
                     btn.setText("Space")
                     btn.setStyleSheet(
-                        "background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 12px; border: 1px solid #CBD5E1; border-radius: 6px; min-width: 40px;")
+                        "background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 11px; border: 1px solid #CBD5E1; border-radius: 6px; min-width: 40px;")
                 else:
                     btn.setStyleSheet(
-                        "background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 12px; border: 1px solid #CBD5E1; border-radius: 6px;")
+                        "background-color: #FFFFFF; color: #1E293B; font-weight: bold; font-size: 11px; border: 1px solid #CBD5E1; border-radius: 6px;")
                 btn.clicked.connect(lambda checked, k=key: self.handle_key_press(k))
                 r_lay.addWidget(btn)
             keyboard_lay.addLayout(r_lay)
         kb_full_card_layout.addWidget(keyboard_widget)
         kb_full_card_layout.addStretch()
 
-        main_layout.addWidget(self.kb_full_card, stretch=5)
-        self.kb_full_card.hide()
+        self.kb_full_scroll = self._make_scroll_area(self.kb_full_card)
+        self.kb_full_scroll.setMaximumWidth(470)
+        self.kb_full_scroll.setMinimumWidth(360)
+        self.kb_full_scroll.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        main_layout.addWidget(self.kb_full_scroll, stretch=5)
+        self.kb_full_scroll.hide()
 
         self.name_input.installEventFilter(self)
         self.category_input.installEventFilter(self)
         self.ingredient_input.installEventFilter(self)
         self.dosage_input.installEventFilter(self)
         self.batch_input.installEventFilter(self)
-        self.expiry_input.installEventFilter(self)
         self.quantity_input.installEventFilter(self)
 
+        page_scroll = self._make_scroll_area(page_content)
+        page_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        page_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        page_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        outer_layout.addWidget(page_scroll)
+
         self.internal_stack.addWidget(page)
+
+    def go_back_to_stock_search(self):
+        if hasattr(self, 'kb_full_card'):
+            self.kb_full_card.hide()
+        if hasattr(self, 'kb_full_scroll'):
+            self.kb_full_scroll.hide()
+        self.internal_stack.setCurrentIndex(0)
+        QTimer.singleShot(150, self.focus_stock_barcode_input)
 
     def handle_input_focus(self, input_field, event):
         for box in [self.barcode_input, self.name_input, self.category_input, self.ingredient_input, self.dosage_input,
                     self.batch_input]:
             box.setStyleSheet(
-                "padding: 8px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 14px; background-color: #F8FAFC; color: #1E293B;")
-        self.expiry_input.setStyleSheet(
-            "padding: 8px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 14px; background-color: #F8FAFC; color: #0F172A;")
+                "padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 13px; background-color: #F8FAFC; color: #1E293B;")
+        combo_style = (
+            "QComboBox { padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; "
+            "font-size: 13px; background-color: #F8FAFC; color: #0F172A; }"
+        )
+        self.expiry_month_input.setStyleSheet(combo_style)
+        self.expiry_year_input.setStyleSheet(combo_style)
         self.quantity_input.setStyleSheet(
-            "padding: 8px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 14px; background-color: #F8FAFC; color: #0F172A;")
+            "padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 13px; background-color: #F8FAFC; color: #0F172A;")
 
         self.current_focused_input = input_field
 
@@ -389,36 +615,29 @@ class MedicationManagementPage(QWidget):
                 super(QLineEdit, input_field).focusInEvent(event)
             elif isinstance(input_field, QSpinBox):
                 super(QSpinBox, input_field).focusInEvent(event)
-            elif isinstance(input_field, QDateEdit):
-                super(QDateEdit, input_field).focusInEvent(event)
 
         input_field.setStyleSheet(
-            "padding: 8px; border: 2px solid #0D9488; border-radius: 6px; font-size: 14px; background-color: #F0FDFA; color: #0F172A; font-weight: bold;")
+            "padding: 6px; border: 2px solid #0D9488; border-radius: 6px; font-size: 13px; background-color: #F0FDFA; color: #0F172A; font-weight: bold;")
 
     def eventFilter(self, obj, event):
-        if event.type() in [QEvent.MouseButtonPress, QEvent.MouseButtonRelease]:
-            if obj == self.barcode_input:
-                self.kb_card.show()
-            elif obj in [self.name_input, self.category_input, self.ingredient_input, self.dosage_input,
-                         self.batch_input, self.expiry_input, self.quantity_input]:
-                if hasattr(obj, 'isEnabled') and not obj.isEnabled():
-                    return super().eventFilter(obj, event)
-                self.kb_full_card.show()
+        # The kiosk now uses the physical barcode scanner and normal text fields.
+        # The custom on-screen keyboard/keypad is disabled so it never pops up.
         return super().eventFilter(obj, event)
 
     def handle_key_press(self, key):
         if not self.current_focused_input: return
 
-        if key == '🔽':
+        if key in ['??', 'Hide']:
             if self.internal_stack.currentIndex() == 0:
                 self.kb_card.hide()
             else:
                 self.kb_full_card.hide()
+                if hasattr(self, 'kb_full_scroll'): self.kb_full_scroll.hide()
             return
 
         if isinstance(self.current_focused_input, QSpinBox):
             current_val = str(self.current_focused_input.value())
-            if key == '⌫':
+            if key in ['?', 'Back']:
                 new_val = current_val[:-1]
                 self.current_focused_input.setValue(int(new_val) if new_val and new_val != '-' else 1)
             elif key == 'Clear':
@@ -431,7 +650,7 @@ class MedicationManagementPage(QWidget):
 
         elif isinstance(self.current_focused_input, QLineEdit):
             current_text = self.current_focused_input.text()
-            if key == '⌫':
+            if key in ['?', 'Back']:
                 self.current_focused_input.setText(current_text[:-1])
             elif key == 'Clear':
                 self.current_focused_input.clear()
@@ -441,27 +660,27 @@ class MedicationManagementPage(QWidget):
         self.current_focused_input.setFocus(Qt.OtherFocusReason)
 
     def check_input_source(self):
-        """ يوجه عملية الفحص إما عن طريق الباركود أو عن طريق اسم الدواء الصريح """
+        """ ???? ????? ????? ??? ?? ???? ???????? ?? ?? ???? ??? ?????? ?????? """
         search_val = self.barcode_input.text().strip()
         if not search_val:
-            QMessageBox.warning(self, "Error", "Please enter search information first.")
+            show_safe_message(self, QMessageBox.Warning, "Error", "Please enter search information first.")
             return
 
-        # إذا اخترنا البحث بالباركود
+        # ??? ?????? ????? ?????????
         if self.verification_mode_combo.currentIndex() == 0:
             self.check_barcode(explicit_barcode=search_val)
         else:
-            # إذا اخترنا البحث باسم الدواء لعدم وجود غلاف باركود
+            # ??? ?????? ????? ???? ?????? ???? ???? ???? ??????
             self.check_by_medicine_name(med_name=search_val)
 
     def check_by_medicine_name(self, med_name):
-        """ فحص ذكي في Airtable عن طريق اسم الدواء وملء البيانات تلقائياً """
+        """ ??? ??? ?? Airtable ?? ???? ??? ?????? ???? ???????? ???????? """
         try:
             self.kb_card.hide()
             formula = f"LOWER({{Medicine Name}}) = LOWER('{med_name}')"
             records = airtable_api.stock_table.all(formula=formula)
 
-            # تفريغ البيانات القديمة المجهزة كـ Fallback
+            # ????? ???????? ??????? ??????? ?? Fallback
             existing_batches = []
             for r in records:
                 fields = r.fields if hasattr(r, 'fields') else r.get('fields', {})
@@ -470,15 +689,30 @@ class MedicationManagementPage(QWidget):
                     "medicine_name": fields.get("Medicine Name", "Unknown"),
                     "expiry_date": fields.get("Expiry Date", ""),
                     "current_quantity": fields.get("Current Pills Count", 0),
-                    "batch_number": fields.get("A Batch", "N/A")
+                    "batch_number": fields.get("A Batch", "N/A"),
+                    "barcode": self.extract_barcode_from_fields(fields)
                 })
 
             if existing_batches:
+                # Keep the real barcode of the existing medicine even though
+                # the user searched by medicine name.
+                self.resolved_barcode = next(
+                    (
+                        batch.get("barcode")
+                        for batch in existing_batches
+                        if batch.get("barcode")
+                    ),
+                    None
+                )
+
                 dialog = BatchSelectionDialog(existing_batches, self)
                 if dialog.exec_() == QDialog.Accepted:
                     if dialog.action_type == "edit":
                         selected = dialog.selected_batch
                         self.existing_record_id = selected["id"]
+
+                        if selected.get("barcode"):
+                            self.resolved_barcode = selected["barcode"]
 
                         record = airtable_api.stock_table.get(self.existing_record_id)
                         fields = record.get('fields', {})
@@ -493,17 +727,20 @@ class MedicationManagementPage(QWidget):
 
                         self.batch_input.setText(str(selected.get("batch_number", "")))
                         self.batch_input.setEnabled(True)
-                        self.expiry_input.setDate(QDate.fromString(selected.get("expiry_date", ""), "yyyy-MM-dd"))
+                        self.set_expiry_from_airtable(selected.get("expiry_date", ""))
                         self.quantity_input.setValue(int(selected.get("current_quantity", 1)))
 
-                        self.form_title.setText("📝 Edit/Correct Batch Details")
-                        self.submit_med_btn.setText("🆙 Update Existing Batch Record")
+                        self.form_title.setText("Edit Batch")
+                        self.submit_med_btn.setText("Update Batch")
                         self.internal_stack.setCurrentIndex(1)
                         self.handle_input_focus(self.quantity_input, None)
 
                     elif dialog.action_type == "new":
                         self.existing_record_id = None
                         first_batch = existing_batches[0]
+
+                        if first_batch.get("barcode"):
+                            self.resolved_barcode = first_batch["barcode"]
 
                         self.name_input.setText(str(first_batch.get("medicine_name", "")))
                         self.name_input.setEnabled(False)
@@ -520,15 +757,17 @@ class MedicationManagementPage(QWidget):
 
                         self.batch_input.clear()
                         self.batch_input.setEnabled(True)
-                        self.expiry_input.setDate(QDate.currentDate())
+                        self.reset_expiry_selection()
                         self.quantity_input.setValue(1)
 
-                        self.form_title.setText("➕ Register New Product Batch (Smart Fill)")
-                        self.submit_med_btn.setText("💾 Commit New Stock to Cloud")
+                        self.form_title.setText("Add New Batch")
+                        self.submit_med_btn.setText("Save")
                         self.internal_stack.setCurrentIndex(1)
                         self.handle_input_focus(self.batch_input, None)
             else:
-                # إذا كان الدواء جديد كلياً وبدون باركود
+                # This is a completely new medicine, so no existing barcode
+                # can be recovered from Airtable.
+                self.resolved_barcode = None
                 self.existing_record_id = None
                 self.name_input.setText(med_name)
                 self.name_input.setEnabled(True)
@@ -540,11 +779,11 @@ class MedicationManagementPage(QWidget):
                 self.dosage_input.setEnabled(True)
                 self.batch_input.clear()
                 self.batch_input.setEnabled(True)
-                self.expiry_input.setDate(QDate.currentDate())
+                self.reset_expiry_selection()
                 self.quantity_input.setValue(1)
 
-                self.form_title.setText("✨ Ingest New Medicine Type")
-                self.submit_med_btn.setText("💾 Commit New Stock to Cloud")
+                self.form_title.setText("Add New Medicine")
+                self.submit_med_btn.setText("Save")
                 self.internal_stack.setCurrentIndex(1)
                 self.handle_input_focus(self.category_input, None)
 
@@ -553,9 +792,51 @@ class MedicationManagementPage(QWidget):
 
     def check_barcode(self, explicit_barcode=None):
         barcode = explicit_barcode or self.barcode_input.text().strip()
+
+        # Barcode search always supplies the barcode directly.
+        self.resolved_barcode = barcode if barcode else None
+
         try:
             self.kb_card.hide()
-            existing_batches = airtable_api.find_all_batches_by_barcode(barcode)
+
+            # Restocking must also find old records whose quantity is zero.
+            # find_all_batches_by_barcode() is intended for dispensing and
+            # intentionally skips empty stock, so it must not be used here.
+            raw_records = airtable_api.get_all_medications_by_barcode(barcode)
+
+            existing_batches = []
+            for record in raw_records:
+                fields = (
+                    record.fields
+                    if hasattr(record, "fields")
+                    else record.get("fields", {})
+                )
+
+                record_id = (
+                    record.id
+                    if hasattr(record, "id")
+                    else record.get("id")
+                )
+
+                existing_batches.append({
+                    "id": record_id,
+                    "medicine_name": fields.get("Medicine Name", "Unknown"),
+                    "expiry_date": fields.get("Expiry Date", ""),
+                    "current_quantity": (
+                        fields.get("Current Pills Count")
+                        or fields.get("Quantity")
+                        or 0
+                    ),
+                    "batch_number": (
+                        fields.get("A Batch")
+                        or fields.get("Batch Number")
+                        or "N/A"
+                    ),
+                    "barcode": (
+                        self.extract_barcode_from_fields(fields)
+                        or barcode
+                    )
+                })
 
             if existing_batches:
                 dialog = BatchSelectionDialog(existing_batches, self)
@@ -563,6 +844,10 @@ class MedicationManagementPage(QWidget):
                     if dialog.action_type == "edit":
                         selected = dialog.selected_batch
                         self.existing_record_id = selected["id"]
+                        self.resolved_barcode = (
+                            selected.get("barcode")
+                            or barcode
+                        )
 
                         record = airtable_api.stock_table.get(self.existing_record_id)
                         fields = record.get('fields', {})
@@ -577,17 +862,21 @@ class MedicationManagementPage(QWidget):
 
                         self.batch_input.setText(str(selected.get("batch_number", "")))
                         self.batch_input.setEnabled(True)
-                        self.expiry_input.setDate(QDate.fromString(selected.get("expiry_date", ""), "yyyy-MM-dd"))
+                        self.set_expiry_from_airtable(selected.get("expiry_date", ""))
                         self.quantity_input.setValue(int(selected.get("current_quantity", 1)))
 
-                        self.form_title.setText("📝 Edit/Correct Batch Details")
-                        self.submit_med_btn.setText("🆙 Update Existing Batch Record")
+                        self.form_title.setText("Edit Batch")
+                        self.submit_med_btn.setText("Update Batch")
                         self.internal_stack.setCurrentIndex(1)
                         self.handle_input_focus(self.quantity_input, None)
 
                     elif dialog.action_type == "new":
                         self.existing_record_id = None
                         first_batch = existing_batches[0]
+                        self.resolved_barcode = (
+                            first_batch.get("barcode")
+                            or barcode
+                        )
 
                         self.name_input.setText(str(first_batch.get("medicine_name", "")))
                         self.name_input.setEnabled(False)
@@ -604,15 +893,18 @@ class MedicationManagementPage(QWidget):
 
                         self.batch_input.clear()
                         self.batch_input.setEnabled(True)
-                        self.expiry_input.setDate(QDate.currentDate())
+                        self.reset_expiry_selection()
                         self.quantity_input.setValue(1)
 
-                        self.form_title.setText("➕ Register New Product Batch (Smart Fill)")
-                        self.submit_med_btn.setText("💾 Commit New Stock to Cloud")
+                        self.form_title.setText("Add New Batch")
+                        self.submit_med_btn.setText("Save")
                         self.internal_stack.setCurrentIndex(1)
                         self.handle_input_focus(self.batch_input, None)
             else:
+                # This barcode has never existed in the system.
+                # Keep it as the barcode for the new medicine.
                 self.existing_record_id = None
+                self.resolved_barcode = barcode
                 self.name_input.clear()
                 self.name_input.setEnabled(True)
                 self.category_input.clear()
@@ -623,36 +915,97 @@ class MedicationManagementPage(QWidget):
                 self.dosage_input.setEnabled(True)
                 self.batch_input.clear()
                 self.batch_input.setEnabled(True)
-                self.expiry_input.setDate(QDate.currentDate())
+                self.reset_expiry_selection()
                 self.quantity_input.setValue(1)
 
-                self.form_title.setText("✨ Ingest New Medicine")
-                self.submit_med_btn.setText("💾 Commit New Stock to Cloud")
+                self.form_title.setText("Add New Medicine")
+                self.submit_med_btn.setText("Save")
                 self.internal_stack.setCurrentIndex(1)
                 self.handle_input_focus(self.name_input, None)
 
         except Exception as e:
             print(f"Error during check barcode: {e}")
 
+    def reset_expiry_selection(self):
+        today = QDate.currentDate()
+        self.expiry_month_input.setCurrentText(f"{today.month():02d}")
+        self.expiry_year_input.setCurrentText(str(today.year()))
+
+    def set_expiry_from_airtable(self, expiry_value):
+        expiry_date = QDate.fromString(str(expiry_value), "yyyy-MM-dd")
+        if not expiry_date.isValid():
+            self.reset_expiry_selection()
+            return
+
+        self.expiry_month_input.setCurrentText(f"{expiry_date.month():02d}")
+        self.expiry_year_input.setCurrentText(str(expiry_date.year()))
+
     def save_medication(self):
-        # في حال لم يكن هناك باركود (دواء ورقي)، نضع قيمة افتراضية "NO_BARCODE" لمنع الأخطاء البرمجية
-        barcode = self.barcode_input.text().strip() if self.verification_mode_combo.currentIndex() == 0 else "NO_BARCODE"
+        # Prefer the barcode resolved from an existing medicine record.
+        # Fall back to the scanned value only when creating a truly new item.
+        barcode = (self.resolved_barcode or "").strip()
+
+        if not barcode and self.verification_mode_combo.currentIndex() == 0:
+            barcode = self.barcode_input.text().strip()
+
+        if not barcode:
+            barcode = "NO_BARCODE"
         name = self.name_input.text().strip()
         ingredient = self.ingredient_input.text().strip()
         cat = self.category_input.text().strip()
         dosage = self.dosage_input.text().strip()
         batch = self.batch_input.text().strip()
 
-        clean_expiry_str = self.expiry_input.date().toString("yyyy-MM-dd")
+        month_text = self.expiry_month_input.currentText().strip()
+        year_text = self.expiry_year_input.currentText().strip()
+
+        try:
+            expiry_month = int(month_text)
+            expiry_year = int(year_text)
+        except ValueError:
+            show_safe_message(
+                self, QMessageBox.Warning, "Input Error",
+                "Please enter a valid expiry month and year."
+            )
+            return
+
+        if expiry_month < 1 or expiry_month > 12:
+            show_safe_message(
+                self, QMessageBox.Warning, "Input Error",
+                "Expiry month must be between 1 and 12."
+            )
+            return
+
+        if expiry_year < 2000 or expiry_year > 9999:
+            show_safe_message(
+                self, QMessageBox.Warning, "Input Error",
+                "Please enter a valid four-digit expiry year."
+            )
+            return
+
+        expiry_last_day = monthrange(expiry_year, expiry_month)[1]
+        clean_expiry_str = QDate(expiry_year, expiry_month, expiry_last_day).toString("yyyy-MM-dd")
         qty = self.quantity_input.value()
 
         if not name or not batch:
-            QMessageBox.warning(self, "Input Error ⚠️", "Medicine Name and Batch Number are mandatory fields.")
+            show_safe_message(self, QMessageBox.Warning, "Input Error", "Medicine name and batch number are required.")
             return
 
         selected_date = datetime.strptime(clean_expiry_str, "%Y-%m-%d").date()
         if selected_date < datetime.now().date():
-            QMessageBox.critical(self, "Expired Medication ❌", "Cannot ingest stock that is already expired.")
+            show_safe_message(self, QMessageBox.Critical, "Expired Medication", "Cannot add expired medicine.")
+            return
+
+        confirm_msg = (
+            "Please confirm:\n\n"
+            f"Medicine: {name}\n"
+            f"Category: {cat or '-'}\n"
+            f"Expiry: {expiry_month:02d}/{expiry_year}\n"
+            f"Quantity: {qty} pills\n\n"
+            "Save this stock change?"
+        )
+
+        if not self.ask_upper_confirmation("Confirm Stock", confirm_msg):
             return
 
         try:
@@ -662,7 +1015,7 @@ class MedicationManagementPage(QWidget):
                     dosage, clean_expiry_str, qty, batch, cat
                 )
                 if record:
-                    QMessageBox.information(self, "Updated ✅", f"Batch record for '{name}' overwritten successfully!")
+                    # No extra success popup: confirmation is the only dialog before saving.
                     self.clear_all_fields()
             else:
                 record = airtable_api.add_new_medication(
@@ -670,10 +1023,10 @@ class MedicationManagementPage(QWidget):
                     user_record_id=self.current_user_record_id
                 )
                 if record:
-                    QMessageBox.information(self, "Success ✅", f"Stock batch for '{name}' synced to cloud repository!")
+                    # No extra success popup: confirmation is the only dialog before saving.
                     self.clear_all_fields()
         except Exception as e:
-            QMessageBox.critical(self, "Server Error ❌", f"Sync process failed:\n{str(e)}")
+            show_safe_message(self, QMessageBox.Critical, "Save Error", f"Save failed:\n{str(e)}")
 
     def json(self):
         return {}
@@ -690,13 +1043,16 @@ class MedicationManagementPage(QWidget):
         self.dosage_input.setEnabled(True)
         self.batch_input.clear()
         self.batch_input.setEnabled(True)
-        self.expiry_input.setDate(QDate.currentDate())
+        self.reset_expiry_selection()
         self.quantity_input.setValue(1)
         self.existing_record_id = None
+        self.resolved_barcode = None
         self.verification_mode_combo.setCurrentIndex(0)
         self.internal_stack.setCurrentIndex(0)
 
         if hasattr(self, 'kb_card'): self.kb_card.hide()
         if hasattr(self, 'kb_full_card'): self.kb_full_card.hide()
+        if hasattr(self, 'kb_full_scroll'): self.kb_full_scroll.hide()
 
         self.handle_input_focus(self.barcode_input, None)
+        QTimer.singleShot(150, self.focus_stock_barcode_input)
