@@ -257,11 +257,24 @@ class CheckinScreen(QWidget):
             api = Api(clean_token)
             patients_table = api.table(clean_base_id, "Patients")
 
-            # ניקוי הקלט: מחיקת רווחים מיותרים והמרה לאותיות קטנות
-            clean_search = str(target_id).strip().lower()
+            # Clean the input and escape characters used inside Airtable formulas.
+            clean_search = str(target_id).strip()
+            escaped_search = (
+                clean_search
+                .replace("\\", "\\\\")
+                .replace("'", "\\'")
+            )
 
-            # נוסחת החיפוש החכמה: מחפשת גם בשם וגם בתעודת הזהות (ללא רגישות לאותיות)
-            formula = f"OR(FIND('{clean_search}', LOWER({{Name}})) > 0, FIND('{clean_search}', LOWER({{Personal ID}})) > 0)"
+            # Exact match only:
+            # - Full name must match completely, ignoring upper/lower case.
+            # - Personal ID must match completely.
+            # Partial names such as only first name or last name are rejected.
+            formula = (
+                "OR("
+                f"LOWER(TRIM({{Name}})) = LOWER(TRIM('{escaped_search}')),"
+                f"LOWER(TRIM({{Personal ID}} & '')) = LOWER(TRIM('{escaped_search}'))"
+                ")"
+            )
 
             records = patients_table.all(formula=formula)
 
