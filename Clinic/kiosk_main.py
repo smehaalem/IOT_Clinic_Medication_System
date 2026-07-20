@@ -13,6 +13,7 @@ from PyQt5.QtCore import Qt
 
 from checkingui import CheckinScreen
 from add_patient_screen import AddPatientScreen
+from edit_patient_screen import EditPatientScreen
 
 
 class MainMenuScreen(QWidget):
@@ -54,15 +55,28 @@ class MainMenuScreen(QWidget):
         btn_start.clicked.connect(self.go_to_checkin)
 
         btn_add_patient = QPushButton("Add New Patient")
-        btn_add_patient.setFixedSize(310, 80)
+        btn_add_patient.setFixedSize(310, 72)
         btn_add_patient.setCursor(QCursor(Qt.PointingHandCursor))
         btn_add_patient.setStyleSheet(self.primary_button_style())
         btn_add_patient.clicked.connect(self.go_to_add_patient)
 
-        actions_row = QHBoxLayout()
-        actions_row.setSpacing(22)
-        actions_row.addWidget(btn_start, alignment=Qt.AlignCenter)
-        actions_row.addWidget(btn_add_patient, alignment=Qt.AlignCenter)
+        btn_edit_patient = QPushButton("Edit Existing Patient")
+        btn_edit_patient.setFixedSize(310, 72)
+        btn_edit_patient.setCursor(QCursor(Qt.PointingHandCursor))
+        btn_edit_patient.setStyleSheet(self.primary_button_style())
+        btn_edit_patient.clicked.connect(self.go_to_edit_patient)
+
+        btn_start.setFixedSize(310, 72)
+
+        first_actions_row = QHBoxLayout()
+        first_actions_row.setSpacing(22)
+        first_actions_row.addWidget(btn_start, alignment=Qt.AlignCenter)
+        first_actions_row.addWidget(btn_add_patient, alignment=Qt.AlignCenter)
+
+        second_actions_row = QHBoxLayout()
+        second_actions_row.addStretch()
+        second_actions_row.addWidget(btn_edit_patient, alignment=Qt.AlignCenter)
+        second_actions_row.addStretch()
 
         btn_exit_kiosk = QPushButton("Exit Kiosk")
         btn_exit_kiosk.setFixedSize(310, 48)
@@ -88,9 +102,11 @@ class MainMenuScreen(QWidget):
         layout.addStretch(1)
         layout.addWidget(title)
         layout.addWidget(subtitle)
+        layout.addSpacing(10)
+        layout.addLayout(first_actions_row)
+        layout.addSpacing(10)
+        layout.addLayout(second_actions_row)
         layout.addSpacing(14)
-        layout.addLayout(actions_row)
-        layout.addSpacing(28)
         layout.addWidget(btn_exit_kiosk, alignment=Qt.AlignCenter)
         layout.addStretch(1)
 
@@ -123,6 +139,12 @@ class MainMenuScreen(QWidget):
             add_patient_widget.prepare_for_add()
         self.stack.setCurrentIndex(2)
 
+    def go_to_edit_patient(self):
+        edit_patient_widget = self.stack.widget(3)
+        if hasattr(edit_patient_widget, "prepare_for_edit"):
+            edit_patient_widget.prepare_for_edit()
+        self.stack.setCurrentIndex(3)
+
     def exit_kiosk_context(self):
         if self.on_back_to_main:
             self.on_back_to_main()
@@ -144,10 +166,12 @@ class KioskRouter(QWidget):
         self.main_menu = MainMenuScreen(self.stack, on_back_to_main=on_back_to_main)
         self.checkin = CheckinScreen(self.stack)
         self.add_patient = AddPatientScreen(self.stack)
+        self.edit_patient = EditPatientScreen(self.stack)
 
         self.stack.addWidget(self.main_menu)
         self.stack.addWidget(self.checkin)
         self.stack.addWidget(self.add_patient)
+        self.stack.addWidget(self.edit_patient)
 
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
