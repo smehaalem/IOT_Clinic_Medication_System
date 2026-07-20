@@ -308,6 +308,7 @@ class CheckinScreen(QWidget):
             QMessageBox.critical(self, "Cloud Error ❌", f"Failed connection diagnostics loop:\n{str(e)}")
             self.prepare_for_scan()
 
+
     def return_to_scanner_screen(self):
         self.kiosk_stack.setCurrentIndex(0)
         self.prepare_for_scan()
