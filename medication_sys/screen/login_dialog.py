@@ -3,18 +3,27 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QApplication
+from PyQt5.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QMessageBox,
+    QApplication
+)
 from PyQt5.QtCore import Qt, QTimer, QEvent
 from PyQt5.QtGui import QCursor
 import airtable_api
 
 
 def make_dialog_kiosk_safe(dialog):
-    flags = dialog.windowFlags()
-    flags |= Qt.Dialog
-    flags |= Qt.WindowStaysOnTopHint
-    flags &= ~Qt.WindowMinimizeButtonHint
-    flags &= ~Qt.WindowMaximizeButtonHint
+    flags = (
+        Qt.Dialog
+        | Qt.FramelessWindowHint
+        | Qt.WindowStaysOnTopHint
+    )
     dialog.setWindowFlags(flags)
     dialog.setWindowModality(Qt.ApplicationModal)
 
@@ -85,8 +94,37 @@ class QuickLoginDialog(QDialog):
         """)
 
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(12, 12, 12, 12)
+        self.main_layout.setContentsMargins(12, 10, 12, 12)
         self.main_layout.setSpacing(6)
+
+        top_bar = QHBoxLayout()
+        top_bar.setContentsMargins(0, 0, 0, 0)
+        top_bar.addStretch()
+
+        self.close_btn = QPushButton("X")
+        self.close_btn.setFixedSize(30, 28)
+        self.close_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #64748B;
+                border: none;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #FEE2E2;
+                color: #DC2626;
+                border-radius: 6px;
+            }
+            QPushButton:pressed {
+                background-color: #FECACA;
+            }
+        """)
+        self.close_btn.clicked.connect(self.reject)
+        top_bar.addWidget(self.close_btn)
+
+        self.main_layout.addLayout(top_bar)
 
         self.title_lbl = QLabel("Security Gate")
         self.title_lbl.setStyleSheet(
