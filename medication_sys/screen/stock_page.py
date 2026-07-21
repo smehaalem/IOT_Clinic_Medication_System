@@ -16,14 +16,64 @@ from PyQt5.QtGui import QCursor, QIntValidator
 import airtable_api
 
 
+def _position_custom_close_button(dialog):
+    button = getattr(dialog, "_custom_close_button", None)
+    if button is None:
+        return
+
+    button.move(max(6, dialog.width() - button.width() - 8), 8)
+    button.raise_()
+
+
+def add_custom_close_button(dialog):
+    """
+    Add an in-app X button so Raspberry Pi's window manager cannot add
+    minimize and maximize buttons.
+    """
+    button = QPushButton("X", dialog)
+    button.setObjectName("customDialogCloseButton")
+    button.setFixedSize(30, 28)
+    button.setCursor(QCursor(Qt.PointingHandCursor))
+    button.setFocusPolicy(Qt.NoFocus)
+    button.setStyleSheet("""
+        QPushButton#customDialogCloseButton {
+            background-color: transparent;
+            color: #64748B;
+            border: none;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        QPushButton#customDialogCloseButton:hover {
+            background-color: #FEE2E2;
+            color: #DC2626;
+            border-radius: 6px;
+        }
+
+        QPushButton#customDialogCloseButton:pressed {
+            background-color: #FECACA;
+            color: #991B1B;
+        }
+    """)
+    button.clicked.connect(dialog.reject)
+
+    dialog._custom_close_button = button
+
+    QTimer.singleShot(0, lambda: _position_custom_close_button(dialog))
+    QTimer.singleShot(80, lambda: _position_custom_close_button(dialog))
+
+
 def make_dialog_kiosk_safe(dialog):
-    flags = dialog.windowFlags()
-    flags |= Qt.Dialog
-    flags |= Qt.WindowStaysOnTopHint
-    flags &= ~Qt.WindowMinimizeButtonHint
-    flags &= ~Qt.WindowMaximizeButtonHint
+    # Remove the operating-system title bar completely.
+    # This guarantees that Raspberry Pi cannot add minimize/maximize buttons.
+    flags = (
+        Qt.Dialog
+        | Qt.FramelessWindowHint
+        | Qt.WindowStaysOnTopHint
+    )
     dialog.setWindowFlags(flags)
     dialog.setWindowModality(Qt.ApplicationModal)
+    add_custom_close_button(dialog)
 
 
 def keep_dialog_visible(dialog):
@@ -36,13 +86,101 @@ def keep_dialog_visible(dialog):
 
 
 def show_safe_message(parent, icon, title, text):
+    # These validation and warning popups use the same custom frameless
+    # design with only an in-app X button.
+    custom_titles = {
+        "Input Error",
+        "Selection Required",
+        "Error",
+        "Expired Medication",
+    }
+
+    if title in custom_titles:
+        dialog = QDialog(parent)
+        dialog.setFixedWidth(400)
+        dialog.setWindowTitle(title)
+        make_dialog_kiosk_safe(dialog)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(20, 42, 20, 18)
+        layout.setSpacing(14)
+
+        title_label = QLabel(title)
+        title_label.setAlignment(Qt.AlignCenter)
+        title_color = "#DC2626" if title in {
+            "Input Error",
+            "Error",
+            "Expired Medication",
+        } else "#EA580C"
+
+        title_label.setStyleSheet(
+            "font-size: 18px; font-weight: bold; "
+            f"color: {title_color};"
+        )
+        layout.addWidget(title_label)
+
+        message_label = QLabel(text)
+        message_label.setWordWrap(True)
+        message_label.setAlignment(Qt.AlignCenter)
+        message_label.setStyleSheet(
+            "font-size: 14px; color: #1E293B; line-height: 20px;"
+        )
+        layout.addWidget(message_label)
+
+        ok_button = QPushButton("OK")
+        ok_button.setMinimumHeight(40)
+        ok_button.setCursor(QCursor(Qt.PointingHandCursor))
+        ok_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4F46E5;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+
+            QPushButton:hover {
+                background-color: #4338CA;
+            }
+
+            QPushButton:pressed {
+                background-color: #3730A3;
+            }
+        """)
+        ok_button.clicked.connect(dialog.accept)
+        layout.addWidget(ok_button)
+
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: #F8FAFC;
+                border: 1px solid #CBD5E1;
+                border-radius: 12px;
+            }
+        """)
+
+        QTimer.singleShot(0, lambda: keep_dialog_visible(dialog))
+        QTimer.singleShot(0, lambda: _position_custom_close_button(dialog))
+        return dialog.exec_()
+
     box = QMessageBox(parent)
     box.setIcon(icon)
     box.setWindowTitle(title)
     box.setText(text)
     box.setStandardButtons(QMessageBox.Ok)
     make_dialog_kiosk_safe(box)
+    box.setStyleSheet("""
+        QMessageBox {
+            background-color: #F8FAFC;
+        }
+
+        QMessageBox QLabel {
+            padding-top: 18px;
+            color: #1E293B;
+        }
+    """)
     QTimer.singleShot(0, lambda: keep_dialog_visible(box))
+    QTimer.singleShot(0, lambda: _position_custom_close_button(box))
     return box.exec_()
 
 
@@ -51,7 +189,7 @@ class BatchSelectionDialog(QDialog):
 
     def __init__(self, batches, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Existing Batches")
+        self.setWindowTitle("available stock")
         self.setFixedWidth(440)
         make_dialog_kiosk_safe(self)
         self.selected_batch = None
@@ -59,14 +197,14 @@ class BatchSelectionDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
-        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setContentsMargins(15, 42, 15, 15)
 
-        title = QLabel("Existing batches found")
+        title = QLabel("available stock found")
         title.setStyleSheet("font-size: 18px; font-weight: bold; color: #0EA5E9;")
         layout.addWidget(title)
 
         desc = QLabel(
-            "We found existing batches for this medicine.\nSelect a batch to EDIT or choose to create a NEW one:")
+            "We found available stock for this medicine.\nSelect to EDIT or choose to create a NEW one:")
         desc.setStyleSheet("font-size: 14px; color: #475569;")
         desc.setWordWrap(True)
         layout.addWidget(desc)
@@ -99,7 +237,7 @@ class BatchSelectionDialog(QDialog):
             "background-color: #EA580C; color: white; font-size: 14px; font-weight: bold; border-radius: 8px; border: none;")
         edit_btn.clicked.connect(self.on_edit_clicked)
 
-        new_batch_btn = QPushButton("New batch")
+        new_batch_btn = QPushButton("New")
         new_batch_btn.setMinimumHeight(36)
         new_batch_btn.setStyleSheet(
             "background-color: #0D9488; color: white; font-size: 14px; font-weight: bold; border-radius: 8px; border: none;")
@@ -235,15 +373,101 @@ class MedicationManagementPage(QWidget):
             pass
 
     def ask_upper_confirmation(self, title, message):
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Question)
-        box.setWindowTitle(title)
-        box.setText(message)
-        box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        box.setDefaultButton(QMessageBox.No)
-        make_dialog_kiosk_safe(box)
-        QTimer.singleShot(0, lambda: self._move_dialog_to_upper_position(box))
-        return box.exec_() == QMessageBox.Yes
+        """
+        Custom frameless confirmation dialog.
+
+        A normal QMessageBox may still receive Raspberry Pi window-manager
+        buttons. This custom QDialog has no system title bar and contains only
+        our own X button.
+        """
+        dialog = QDialog(self)
+        dialog.setFixedWidth(430)
+        dialog.setWindowTitle(title)
+        make_dialog_kiosk_safe(dialog)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(20, 42, 20, 18)
+        layout.setSpacing(14)
+
+        title_label = QLabel(title)
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet(
+            "font-size: 18px; font-weight: bold; color: #4F46E5;"
+        )
+        layout.addWidget(title_label)
+
+        message_label = QLabel(message)
+        message_label.setWordWrap(True)
+        message_label.setAlignment(Qt.AlignLeft)
+        message_label.setStyleSheet(
+            "font-size: 14px; color: #1E293B; line-height: 20px;"
+        )
+        layout.addWidget(message_label)
+
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+
+        no_button = QPushButton("No")
+        no_button.setMinimumHeight(40)
+        no_button.setCursor(QCursor(Qt.PointingHandCursor))
+        no_button.setStyleSheet("""
+            QPushButton {
+                background-color: #F1F5F9;
+                color: #475569;
+                border: 1px solid #CBD5E1;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #E2E8F0;
+            }
+        """)
+        no_button.clicked.connect(dialog.reject)
+
+        yes_button = QPushButton("Yes")
+        yes_button.setMinimumHeight(40)
+        yes_button.setCursor(QCursor(Qt.PointingHandCursor))
+        yes_button.setStyleSheet("""
+            QPushButton {
+                background-color: #0D9488;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #0F766E;
+            }
+            QPushButton:pressed {
+                background-color: #115E59;
+            }
+        """)
+        yes_button.clicked.connect(dialog.accept)
+
+        buttons_layout.addWidget(no_button)
+        buttons_layout.addWidget(yes_button)
+        layout.addLayout(buttons_layout)
+
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: #F8FAFC;
+                border: 1px solid #CBD5E1;
+                border-radius: 12px;
+            }
+        """)
+
+        QTimer.singleShot(
+            0,
+            lambda: self._move_dialog_to_upper_position(dialog)
+        )
+        QTimer.singleShot(
+            0,
+            lambda: _position_custom_close_button(dialog)
+        )
+
+        return dialog.exec_() == QDialog.Accepted
 
     def init_scan_page(self):
         page = QWidget()
@@ -674,13 +898,38 @@ class MedicationManagementPage(QWidget):
             self.check_by_medicine_name(med_name=search_val)
 
     def check_by_medicine_name(self, med_name):
-        """ ??? ??? ?? Airtable ?? ???? ??? ?????? ???? ???????? ???????? """
+        """
+        Find every stock record that belongs to the exact medicine name.
+
+        The search is exact but ignores letter case and repeated/outer spaces.
+        Records are included regardless of whether they were originally added
+        through medicine-name search or barcode search.
+        """
         try:
             self.kb_card.hide()
-            formula = f"LOWER({{Medicine Name}}) = LOWER('{med_name}')"
-            records = airtable_api.stock_table.all(formula=formula)
 
-            # ????? ???????? ??????? ??????? ?? Fallback
+            def normalize_name(value):
+                return " ".join(str(value or "").strip().lower().split())
+
+            requested_name = normalize_name(med_name)
+
+            # Read all stock rows, then compare the actual Medicine Name field.
+            # This guarantees that barcode-created batches are included too.
+            all_records = airtable_api.stock_table.all()
+
+            records = []
+            for record in all_records:
+                fields = (
+                    record.fields
+                    if hasattr(record, "fields")
+                    else record.get("fields", {})
+                )
+
+                stored_name = normalize_name(fields.get("Medicine Name", ""))
+
+                if stored_name == requested_name:
+                    records.append(record)
+
             existing_batches = []
             for r in records:
                 fields = r.fields if hasattr(r, 'fields') else r.get('fields', {})
@@ -688,8 +937,16 @@ class MedicationManagementPage(QWidget):
                     "id": r.id if hasattr(r, 'id') else r.get('id'),
                     "medicine_name": fields.get("Medicine Name", "Unknown"),
                     "expiry_date": fields.get("Expiry Date", ""),
-                    "current_quantity": fields.get("Current Pills Count", 0),
-                    "batch_number": fields.get("A Batch", "N/A"),
+                    "current_quantity": (
+                        fields.get("Current Pills Count")
+                        or fields.get("Quantity")
+                        or 0
+                    ),
+                    "batch_number": (
+                        fields.get("A Batch")
+                        or fields.get("Batch Number")
+                        or "N/A"
+                    ),
                     "barcode": self.extract_barcode_from_fields(fields)
                 })
 
@@ -730,8 +987,8 @@ class MedicationManagementPage(QWidget):
                         self.set_expiry_from_airtable(selected.get("expiry_date", ""))
                         self.quantity_input.setValue(int(selected.get("current_quantity", 1)))
 
-                        self.form_title.setText("Edit Batch")
-                        self.submit_med_btn.setText("Update Batch")
+                        self.form_title.setText("Edit")
+                        self.submit_med_btn.setText("Update")
                         self.internal_stack.setCurrentIndex(1)
                         self.handle_input_focus(self.quantity_input, None)
 
@@ -792,17 +1049,46 @@ class MedicationManagementPage(QWidget):
 
     def check_barcode(self, explicit_barcode=None):
         barcode = explicit_barcode or self.barcode_input.text().strip()
-
-        # Barcode search always supplies the barcode directly.
         self.resolved_barcode = barcode if barcode else None
 
         try:
             self.kb_card.hide()
 
-            # Restocking must also find old records whose quantity is zero.
-            # find_all_batches_by_barcode() is intended for dispensing and
-            # intentionally skips empty stock, so it must not be used here.
-            raw_records = airtable_api.get_all_medications_by_barcode(barcode)
+            def normalize_name(value):
+                return " ".join(str(value or "").strip().lower().split())
+
+            # First resolve the scanned barcode to its medicine name.
+            barcode_records = airtable_api.get_all_medications_by_barcode(barcode)
+
+            matched_name = ""
+            for record in barcode_records:
+                fields = (
+                    record.fields
+                    if hasattr(record, "fields")
+                    else record.get("fields", {})
+                )
+                candidate_name = fields.get("Medicine Name", "")
+                if str(candidate_name or "").strip():
+                    matched_name = str(candidate_name).strip()
+                    break
+
+            # Then load every stock row with that exact medicine name,
+            # including rows created previously by name with NO_BARCODE.
+            if matched_name:
+                requested_name = normalize_name(matched_name)
+                raw_records = []
+
+                for record in airtable_api.stock_table.all():
+                    fields = (
+                        record.fields
+                        if hasattr(record, "fields")
+                        else record.get("fields", {})
+                    )
+
+                    if normalize_name(fields.get("Medicine Name", "")) == requested_name:
+                        raw_records.append(record)
+            else:
+                raw_records = barcode_records
 
             existing_batches = []
             for record in raw_records:
@@ -811,7 +1097,6 @@ class MedicationManagementPage(QWidget):
                     if hasattr(record, "fields")
                     else record.get("fields", {})
                 )
-
                 record_id = (
                     record.id
                     if hasattr(record, "id")
@@ -844,10 +1129,7 @@ class MedicationManagementPage(QWidget):
                     if dialog.action_type == "edit":
                         selected = dialog.selected_batch
                         self.existing_record_id = selected["id"]
-                        self.resolved_barcode = (
-                            selected.get("barcode")
-                            or barcode
-                        )
+                        self.resolved_barcode = selected.get("barcode") or barcode
 
                         record = airtable_api.stock_table.get(self.existing_record_id)
                         fields = record.get('fields', {})
@@ -873,10 +1155,7 @@ class MedicationManagementPage(QWidget):
                     elif dialog.action_type == "new":
                         self.existing_record_id = None
                         first_batch = existing_batches[0]
-                        self.resolved_barcode = (
-                            first_batch.get("barcode")
-                            or barcode
-                        )
+                        self.resolved_barcode = barcode
 
                         self.name_input.setText(str(first_batch.get("medicine_name", "")))
                         self.name_input.setEnabled(False)
@@ -901,8 +1180,6 @@ class MedicationManagementPage(QWidget):
                         self.internal_stack.setCurrentIndex(1)
                         self.handle_input_focus(self.batch_input, None)
             else:
-                # This barcode has never existed in the system.
-                # Keep it as the barcode for the new medicine.
                 self.existing_record_id = None
                 self.resolved_barcode = barcode
                 self.name_input.clear()
@@ -1010,13 +1287,38 @@ class MedicationManagementPage(QWidget):
 
         try:
             if self.existing_record_id:
-                record = airtable_api.update_medication_full_fields(
-                    self.existing_record_id, name, barcode, ingredient,
-                    dosage, clean_expiry_str, qty, batch, cat
+                # Update the exact Airtable stock record that was selected.
+                # The previous helper used the wrong Airtable field name
+                # ("A Category"), so Airtable rejected the entire update.
+                fields_to_update = {
+                    "Medicine Name": str(name),
+                    "Barcode": str(barcode),
+                    "Active Ingredient": str(ingredient),
+                    "Dosage": str(dosage),
+                    "Expiry Date": str(clean_expiry_str),
+                    "Current Pills Count": int(qty),
+                    "A Batch": str(batch),
+                    "Category": str(cat),
+                }
+
+                record = airtable_api.stock_table.update(
+                    self.existing_record_id,
+                    fields_to_update,
+                    typecast=True
                 )
-                if record:
-                    # No extra success popup: confirmation is the only dialog before saving.
-                    self.clear_all_fields()
+
+                if not record:
+                    raise RuntimeError(
+                        "Airtable did not return the updated medication record."
+                    )
+
+                print(
+                    "MedicationManagementPage: updated Airtable record "
+                    f"{self.existing_record_id}"
+                )
+
+                # No extra success popup: confirmation is the only dialog before saving.
+                self.clear_all_fields()
             else:
                 record = airtable_api.add_new_medication(
                     name, barcode, ingredient, dosage, clean_expiry_str, qty, qty, batch, cat,

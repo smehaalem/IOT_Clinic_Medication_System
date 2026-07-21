@@ -59,11 +59,25 @@ def fetch_low_stock_medicines():
                 raw_name = fields.get('Name', 'Unknown')
                 if isinstance(raw_name, list): raw_name = raw_name[0]
 
-                category = fields.get('Category / Use', 'General Medicine')
-                if isinstance(category, list): category = category[0]
+                category = (
+                    fields.get('Category / Use')
+                    or fields.get('category text/ Use')
+                    or fields.get('Category')
+                    or 'Unknown'
+                )
+                if isinstance(category, list):
+                    category = category[0] if category else 'Unknown'
+                elif isinstance(category, dict):
+                    category = (
+                        category.get('text')
+                        or category.get('name')
+                        or category.get('value')
+                        or 'Unknown'
+                    )
 
                 strength = fields.get('Strength', 'N/A')
-                if isinstance(strength, list): strength = strength[0]
+                if isinstance(strength, list):
+                    strength = strength[0] if strength else 'N/A'
 
                 low_stock_list.append({
                     'Barcode': str(raw_barcode).strip(),
@@ -232,13 +246,11 @@ class LowStockReportPage(QWidget):
         card_layout.addWidget(self.stats_lbl)
 
         self.report_table = QTableWidget()
-        self.report_table.setColumnCount(5)
+        self.report_table.setColumnCount(3)
         self.report_table.setHorizontalHeaderLabels([
             "Medicine Name",
             "Category / Use",
-            "Strength",
-            "Available Qty",
-            "Threshold"
+            "Available Qty"
         ])
         self.report_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.report_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -314,8 +326,6 @@ class LowStockReportPage(QWidget):
         header.setSectionResizeMode(0, QHeaderView.Stretch)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
 
         self.report_table.verticalHeader().setDefaultSectionSize(36)
 
@@ -335,18 +345,13 @@ class LowStockReportPage(QWidget):
         for idx, item in enumerate(data):
             name_cell = QTableWidgetItem(item["Name"])
             category_cell = QTableWidgetItem(item["Category"])
-            strength_cell = QTableWidgetItem(item["Strength"])
             quantity_cell = QTableWidgetItem(str(item["Quantity"]))
-            threshold_cell = QTableWidgetItem(str(item["Threshold"]))
 
             quantity_cell.setTextAlignment(Qt.AlignCenter)
-            threshold_cell.setTextAlignment(Qt.AlignCenter)
 
             self.report_table.setItem(idx, 0, name_cell)
             self.report_table.setItem(idx, 1, category_cell)
-            self.report_table.setItem(idx, 2, strength_cell)
-            self.report_table.setItem(idx, 3, quantity_cell)
-            self.report_table.setItem(idx, 4, threshold_cell)
+            self.report_table.setItem(idx, 2, quantity_cell)
 
     def handle_back(self):
         if self.on_back_to_menu is not None:

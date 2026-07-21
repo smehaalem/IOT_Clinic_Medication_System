@@ -397,6 +397,10 @@ class InventoryViewPage(QWidget):
                 if not fields.get("Medicine Name"):
                     continue
 
+                # Hide empty stock rows completely from the inventory tables.
+                if qty <= 0:
+                    continue
+
                 raw_barcode = (
                     fields.get("Barcode lookup")
                     or fields.get("Barcode")
