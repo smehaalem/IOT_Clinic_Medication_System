@@ -1,188 +1,71 @@
-# Medication Management Module
+# Medication UI Screens
 
-This directory contains the staff-facing medication system, offline data layer, Airtable integration, and main kiosk application.
+This directory contains the staff-facing screens used by `medicine_menu.py`.
 
-## Entry Point
+These files are application pages, not standalone entry points.
 
-```bash
-cd medication_sys
-python3 medicine_menu.py
-```
+## `login_dialog.py`
 
-The application launches in full-screen kiosk mode.
+Staff authentication dialog.
 
-## Main Files
+- Loads users from Airtable when online.
+- Falls back to the SQLite user cache when offline.
+- Returns the authenticated Airtable record and role.
+- Uses a kiosk-safe frameless dialog.
 
-### `medicine_menu.py`
+## `stock_page.py`
 
-Main application router.
+Add and update stock.
 
-- Opens the medication login flow.
-- Opens the patient kiosk.
-- Maintains the authenticated staff session.
-- Displays medication operations according to the logged-in role.
-- Protects application exit with `KIOSK_EXIT_PASSWORD`.
-- Warms the offline cache during startup.
+- Search by barcode or exact medicine name.
+- Display all existing batches for the selected medicine.
+- Include name-created and barcode-created batches under the same medicine name.
+- Create a new batch or edit the selected batch.
+- Preserve or resolve a real barcode when possible.
+- Store expiry using the last day of the chosen month.
+- Use custom frameless confirmation and validation dialogs.
 
-### `airtable_api.py`
+## `dispense_page.py`
 
-Shared data-access layer.
+Medication dispensing.
 
-- Wraps the Airtable stock and history tables.
-- Writes medicine changes to SQLite first.
-- Falls back to local records while offline.
-- Queues pending create, update, delete, and history operations.
-- Caches staff accounts for offline login.
-- Synchronizes medicine identity data into `Medicines Catalog`.
+- Search by barcode, medicine name, category, active ingredient, or batch.
+- Display one summary row per medicine name.
+- Load all positive-quantity batches under the selected medicine.
+- Allocate by earliest expiry unless batches are selected manually.
+- Require a doctor name.
+- Show the final allocation before saving.
+- Record the action under the logged-in staff member.
+- Use custom frameless dialogs for messages, doctor input, and confirmation.
 
-### `local_db.py`
+## `inventory_view_page.py`
 
-SQLite persistence layer.
+Active-stock browser.
 
-The database file is:
+- Refreshes whenever the page is opened.
+- Hides zero-quantity rows.
+- Groups stock by medicine name.
+- Shows total quantity and batch-level details.
+- Filters by medicine name, category/use, barcode, or active ingredient.
 
-```text
-clinic_local.db
-```
+## `admin_page.py`
 
-It contains:
+Manager portal.
 
-- `medicines`
-- `users_cache`
-- `local_history`
-- `sync_queue`
+- Create and edit staff accounts.
+- Delete staff accounts.
+- Require an email for the manager role.
+- Display positive-quantity disposal inventory.
+- Permanently discard a selected medicine batch.
+- Use custom frameless validation, status, and confirmation dialogs.
 
-### `inventory_check.py`
+## Navigation
 
-Creates the embedded low-stock report from `Medicines Catalog`.
+The screens receive callbacks from `MedicineSystemApp` rather than closing the whole application.
 
-A medicine is included when:
+The authenticated session is passed to:
 
-```text
-Total Valid Quantity < Minimum Required
-```
+- `MedicationManagementPage`
+- `DispenseMedicationPage`
 
-The visible report contains medicine name, category/use, and available quantity.
-
-### `medication_service.py`
-
-Older service-level restock and dispense helpers.
-
-The current graphical workflow mainly operates through the screen classes and `airtable_api.py`. Treat this file as a legacy/developer helper unless it is intentionally connected to a new workflow.
-
-### `screen/`
-
-Contains the login, stock, dispensing, active-stock, and administration screens. See [`screen/README.md`](screen/README.md).
-
-### `tests/`
-
-Contains developer and integration scripts. See [`tests/README.md`](tests/README.md).
-
-## Medication Workflows
-
-### Add or Update Stock
-
-Staff can search by barcode or medicine name.
-
-- Existing batches are displayed before creating another batch.
-- Name search includes every stock row with the exact same medicine name, including rows originally created through barcode search.
-- Barcode search includes every matching barcode record.
-- The user can edit a selected batch or create a new batch.
-- Expiry is selected as month and year; the stored Airtable date uses the last day of that month.
-
-### Active Stock
-
-- Groups batches by medicine name.
-- Shows the total available quantity.
-- Hides batches whose quantity is zero or lower.
-- Supports search by medicine name, category/use, barcode, and active ingredient.
-- Opens a batch-level breakdown.
-
-### Dispensing
-
-- Supports selection by barcode or medicine name.
-- Loads all available batches belonging to the selected medicine.
-- Uses earliest expiry first unless staff select specific batches.
-- Requests the doctor name before completion.
-- Shows a single final confirmation.
-- Updates quantity by record ID.
-- Writes a history record with the logged-in staff member.
-
-### Low Stock
-
-Reads the cloud `Medicines Catalog` table and displays medicines below their configured threshold.
-
-### Administration
-
-The manager portal supports:
-
-- Staff-account creation and editing
-- Staff-account deletion
-- Disposal inventory
-- Permanent batch deletion with confirmation
-- Disposal history logging
-
-## Offline-First Scope
-
-Supported locally:
-
-- Medicine-stock reads
-- Medicine additions
-- Medicine quantity updates
-- Medicine field updates
-- Medicine deletions
-- Dispensing history queue
-- Cached staff login
-
-Cloud-dependent features:
-
-- Patient workflows
-- Staff-account administration
-- Low-stock catalog report
-- Catalog synchronization while no internet is available
-
-## Configuration
-
-Create:
-
-```text
-.env
-```
-
-inside `medication_sys/`:
-
-```env
-AIRTABLE_TOKEN=your_airtable_personal_access_token
-BASE_ID=your_airtable_base_id
-KIOSK_EXIT_PASSWORD=your_kiosk_exit_password
-```
-
-Configured Airtable table names are defined in `config.py`.
-
-## Required Module
-
-`airtable_api.py` imports `sync_manager`.
-
-The reviewed archive does not contain:
-
-```text
-medication_sys/sync_manager.py
-```
-
-This file must provide the internet check and pending-operation synchronization used by the hybrid data layer.
-
-## Dependencies
-
-```bash
-python3 -m pip install PyQt5 pyairtable python-dotenv
-```
-
-The complete repository also uses `qrcode`, `Pillow`, and `requests` in other modules and tests.
-
-## Generated File
-
-```text
-clinic_local.db
-```
-
-The database is created automatically and should normally not be committed.
+This allows restock and dispensing records to identify the logged-in staff member.
