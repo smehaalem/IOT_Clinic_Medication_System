@@ -255,9 +255,48 @@ class AddPatientScreen(QWidget):
 
         self.dob_input.setStyleSheet(self.input_style())
         self.dob_input.setFixedHeight(38)
+
+        calendar = self.dob_input.calendarWidget()
+        calendar.setStyleSheet("""
+            QCalendarWidget {
+                background-color: #FFFFFF;
+                color: #0F172A;
+            }
+            QCalendarWidget QWidget#qt_calendar_navigationbar {
+                background-color: #F1F5F9;
+            }
+            QCalendarWidget QToolButton {
+                background-color: transparent;
+                color: #0F172A;
+                font-size: 14px;
+                font-weight: bold;
+                border: none;
+                padding: 6px;
+            }
+            QCalendarWidget QToolButton:hover {
+                background-color: #E2E8F0;
+                border-radius: 6px;
+            }
+            QCalendarWidget QSpinBox {
+                background-color: #FFFFFF;
+                color: #0F172A;
+                selection-background-color: #4F46E5;
+                selection-color: #FFFFFF;
+                border: 1px solid #CBD5E1;
+                border-radius: 5px;
+                padding: 3px;
+            }
+            QCalendarWidget QAbstractItemView {
+                background-color: #FFFFFF;
+                color: #0F172A;
+                selection-background-color: #4F46E5;
+                selection-color: #FFFFFF;
+                outline: none;
+            }
+        """)
+
         self.phone_input = self.make_line_edit("Phone number")
         self.gender_combo = self.make_combo(["", "Female", "Male", "Non-binary"])
-        self.id_type_combo = self.make_combo(["", "new", "old"])
         self.emergency_input = self.make_line_edit("Emergency contact")
         self.city_input = self.make_line_edit("City / Unhoused")
         self.referred_input = self.make_line_edit("Referred by")
@@ -273,13 +312,11 @@ class AddPatientScreen(QWidget):
         self.add_field(card_layout, 1, 0, "Date of Birth", self.dob_input)
         self.add_field(card_layout, 1, 1, "Phone", self.phone_input)
         self.add_field(card_layout, 2, 0, "Gender", self.gender_combo)
-        self.add_field(card_layout, 2, 1, "ID Type", self.id_type_combo)
-        self.add_field(card_layout, 3, 0, "Emergy contact", self.emergency_input)
-        self.add_field(card_layout, 3, 1, "City / Unhoused", self.city_input)
-        self.add_field(card_layout, 4, 0, "Referred by", self.referred_input)
-        self.add_field(card_layout, 4, 1, "Notes", self.notes_input)
-
-        self.add_field(card_layout, 5, 0, "Manual ID", self.manual_id_input)
+        self.add_field(card_layout, 2, 1, "Emergy contact", self.emergency_input)
+        self.add_field(card_layout, 3, 0, "City / Unhoused", self.city_input)
+        self.add_field(card_layout, 3, 1, "Referred by", self.referred_input)
+        self.add_field(card_layout, 4, 0, "Notes", self.notes_input)
+        self.add_field(card_layout, 4, 1, "Manual ID", self.manual_id_input)
 
         page_layout.addWidget(card)
 
@@ -387,7 +424,6 @@ class AddPatientScreen(QWidget):
         self.dob_input.setDate(QDate.currentDate())
         self.phone_input.clear()
         self.gender_combo.setCurrentIndex(0)
-        self.id_type_combo.setCurrentIndex(0)
         self.emergency_input.clear()
         self.city_input.clear()
         self.referred_input.clear()
@@ -416,9 +452,7 @@ class AddPatientScreen(QWidget):
         if gender:
             payload["Gender"] = gender
 
-        id_type = self.id_type_combo.currentText().strip()
-        if id_type:
-            payload["ID Type"] = id_type
+        payload["ID Type"] = "new"
 
         payload["Date of Birth"] = self.dob_input.date().toString("yyyy-MM-dd")
 

@@ -211,7 +211,7 @@ class EditPatientScreen(QWidget):
             self.search_input.setPlaceholderText("Enter exact Personal ID")
         else:
             self.search_input.setPlaceholderText(
-                "Enter exact full name, for example: RABAB JAMAL"
+                "Please enter exact full name"
             )
 
         self.search_input.clear()
@@ -516,10 +516,8 @@ class EditPatientScreen(QWidget):
             )
             return
 
-        if not self.name_input.text().strip():
-            self.set_status(self.edit_status, "Name is required.", False)
-            return
-
+        # Existing patient fields may intentionally be cleared.
+        # Do not require the name or any other editable field during an update.
         payload = self.collect_payload()
 
         try:
