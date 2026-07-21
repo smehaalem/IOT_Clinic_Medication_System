@@ -117,7 +117,3 @@ python3 -m pip install PyQt5 pyairtable python-dotenv qrcode Pillow
 ```
 
 The printer also requires CUPS and the `lp` command.
-
-## Connectivity
-
-The patient module communicates directly with Airtable. It does not currently use the medication subsystem's SQLite offline queue.
