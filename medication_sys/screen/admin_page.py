@@ -13,14 +13,50 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QCursor
 
 
+def _position_custom_close_button(dialog):
+    button = getattr(dialog, "_custom_close_button", None)
+    if button is None:
+        return
+    button.move(max(6, dialog.width() - button.width() - 8), 8)
+    button.raise_()
+
+
+def add_custom_close_button(dialog):
+    button = QPushButton("X", dialog)
+    button.setObjectName("customDialogCloseButton")
+    button.setFixedSize(30, 28)
+    button.setCursor(QCursor(Qt.PointingHandCursor))
+    button.setFocusPolicy(Qt.NoFocus)
+    button.setStyleSheet("""
+        QPushButton#customDialogCloseButton {
+            background-color: transparent;
+            color: #64748B;
+            border: none;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        QPushButton#customDialogCloseButton:hover {
+            background-color: #FEE2E2;
+            color: #DC2626;
+            border-radius: 6px;
+        }
+        QPushButton#customDialogCloseButton:pressed {
+            background-color: #FECACA;
+            color: #991B1B;
+        }
+    """)
+    button.clicked.connect(dialog.reject)
+    dialog._custom_close_button = button
+    QTimer.singleShot(0, lambda: _position_custom_close_button(dialog))
+    QTimer.singleShot(80, lambda: _position_custom_close_button(dialog))
+
+
 def make_dialog_kiosk_safe(dialog):
-    flags = dialog.windowFlags()
-    flags |= Qt.Dialog
-    flags |= Qt.WindowStaysOnTopHint
-    flags &= ~Qt.WindowMinimizeButtonHint
-    flags &= ~Qt.WindowMaximizeButtonHint
-    dialog.setWindowFlags(flags)
+    dialog.setWindowFlags(
+        Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+    )
     dialog.setWindowModality(Qt.ApplicationModal)
+    add_custom_close_button(dialog)
 
 
 def keep_dialog_visible(dialog):
@@ -32,28 +68,146 @@ def keep_dialog_visible(dialog):
         pass
 
 
+def _dialog_title_color(icon):
+    if icon == QMessageBox.Critical:
+        return "#DC2626"
+    if icon == QMessageBox.Warning:
+        return "#EA580C"
+    if icon == QMessageBox.Information:
+        return "#4F46E5"
+    return "#334155"
+
+
 def show_safe_message(parent, icon, title, text):
-    box = QMessageBox(parent)
-    box.setIcon(icon)
-    box.setWindowTitle(title)
-    box.setText(text)
-    box.setStandardButtons(QMessageBox.Ok)
-    make_dialog_kiosk_safe(box)
-    QTimer.singleShot(0, lambda: keep_dialog_visible(box))
-    return box.exec_()
+    dialog = QDialog(parent)
+    dialog.setFixedWidth(410)
+    dialog.setWindowTitle(title)
+    make_dialog_kiosk_safe(dialog)
+
+    layout = QVBoxLayout(dialog)
+    layout.setContentsMargins(20, 42, 20, 18)
+    layout.setSpacing(14)
+
+    title_label = QLabel(title)
+    title_label.setAlignment(Qt.AlignCenter)
+    title_label.setStyleSheet(
+        "font-size: 18px; font-weight: bold; "
+        f"color: {_dialog_title_color(icon)};"
+    )
+    layout.addWidget(title_label)
+
+    message_label = QLabel(text)
+    message_label.setWordWrap(True)
+    message_label.setAlignment(Qt.AlignCenter)
+    message_label.setStyleSheet("font-size: 14px; color: #1E293B;")
+    layout.addWidget(message_label)
+
+    ok_button = QPushButton("OK")
+    ok_button.setMinimumHeight(40)
+    ok_button.setCursor(QCursor(Qt.PointingHandCursor))
+    ok_button.setStyleSheet("""
+        QPushButton {
+            background-color: #4F46E5;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        QPushButton:hover { background-color: #4338CA; }
+        QPushButton:pressed { background-color: #3730A3; }
+    """)
+    ok_button.clicked.connect(dialog.accept)
+    layout.addWidget(ok_button)
+
+    dialog.setStyleSheet("""
+        QDialog {
+            background-color: #F8FAFC;
+            border: 1px solid #CBD5E1;
+            border-radius: 12px;
+        }
+    """)
+
+    QTimer.singleShot(0, lambda: keep_dialog_visible(dialog))
+    QTimer.singleShot(0, lambda: _position_custom_close_button(dialog))
+    return dialog.exec_()
 
 
 def ask_safe_confirmation(parent, icon, title, text):
-    box = QMessageBox(parent)
-    box.setIcon(icon)
-    box.setWindowTitle(title)
-    box.setText(text)
-    box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-    box.setDefaultButton(QMessageBox.No)
-    make_dialog_kiosk_safe(box)
-    QTimer.singleShot(0, lambda: keep_dialog_visible(box))
-    return box.exec_() == QMessageBox.Yes
+    dialog = QDialog(parent)
+    dialog.setFixedWidth(430)
+    dialog.setWindowTitle(title)
+    make_dialog_kiosk_safe(dialog)
 
+    layout = QVBoxLayout(dialog)
+    layout.setContentsMargins(20, 42, 20, 18)
+    layout.setSpacing(14)
+
+    title_label = QLabel(title)
+    title_label.setAlignment(Qt.AlignCenter)
+    title_label.setStyleSheet(
+        "font-size: 18px; font-weight: bold; "
+        f"color: {_dialog_title_color(icon)};"
+    )
+    layout.addWidget(title_label)
+
+    message_label = QLabel(text)
+    message_label.setWordWrap(True)
+    message_label.setAlignment(Qt.AlignCenter)
+    message_label.setStyleSheet("font-size: 14px; color: #1E293B;")
+    layout.addWidget(message_label)
+
+    buttons_layout = QHBoxLayout()
+    buttons_layout.setSpacing(10)
+
+    no_button = QPushButton("No")
+    no_button.setMinimumHeight(40)
+    no_button.setCursor(QCursor(Qt.PointingHandCursor))
+    no_button.setStyleSheet("""
+        QPushButton {
+            background-color: #F1F5F9;
+            color: #475569;
+            border: 1px solid #CBD5E1;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        QPushButton:hover { background-color: #E2E8F0; }
+    """)
+    no_button.clicked.connect(dialog.reject)
+
+    yes_button = QPushButton("Yes")
+    yes_button.setMinimumHeight(40)
+    yes_button.setCursor(QCursor(Qt.PointingHandCursor))
+    yes_button.setStyleSheet("""
+        QPushButton {
+            background-color: #10B981;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        QPushButton:hover { background-color: #059669; }
+        QPushButton:pressed { background-color: #047857; }
+    """)
+    yes_button.clicked.connect(dialog.accept)
+
+    buttons_layout.addWidget(no_button)
+    buttons_layout.addWidget(yes_button)
+    layout.addLayout(buttons_layout)
+
+    dialog.setStyleSheet("""
+        QDialog {
+            background-color: #F8FAFC;
+            border: 1px solid #CBD5E1;
+            border-radius: 12px;
+        }
+    """)
+
+    QTimer.singleShot(0, lambda: keep_dialog_visible(dialog))
+    QTimer.singleShot(0, lambda: _position_custom_close_button(dialog))
+    return dialog.exec_() == QDialog.Accepted
 
 def make_scroll_area(widget):
     scroll = QScrollArea()
