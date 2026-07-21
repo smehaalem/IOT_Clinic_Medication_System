@@ -75,6 +75,13 @@ The interface is optimized around an 800×480 display.
 │   ├── inventory_check.py
 │   ├── medication_service.py
 │   ├── screen/
+│   │   ├── __init__.py
+│   │   ├── login_dialog.py
+│   │   ├── stock_page.py
+│   │   ├── dispense_page.py
+│   │   ├── inventory_view_page.py
+│   │   ├── admin_page.py
+│   │   └── README.md
 │   ├── tests/
 │   └── README.md
 ├── Unit Tests/
@@ -196,16 +203,6 @@ Clinic/last_edited_patient_label.png
 ```
 
 These files should normally remain outside Git.
-
-## Required Local Module
-
-`medication_sys/airtable_api.py` imports:
-
-```text
-sync_manager.py
-```
-
-That module is required for connectivity checks and pending-operation synchronization, but it was not included in the reviewed project archive. Place it inside `medication_sys/` before running the complete medication system.
 
 ## Additional Documentation
 
